@@ -3,9 +3,15 @@
   --bg: #ffffff;
   --fg: #1a1a1a;
   --muted: #6b6b6b;
-  --border: #e3e3e3;
+  --border: #ccc;
   --accent: #1a73e8;
   --hover: #f4f6fa;
+
+  /* Default solid-button background and its hover state.
+     Use these for any pill/chip-style button (e.g. .sc-search-engine-switcher)
+     so button colours stay consistent across the UI. Override per-mode below. */
+  --btn-bg: #f6f7f8;
+  --btn-bg-hover: #dcdedf;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -16,6 +22,8 @@
     --border: #3a3944;
     --accent: #8ab4f8;
     --hover: #2a2933;
+    --btn-bg: #2f2f37;
+    --btn-bg-hover: #3a3944;
   }
 }
 
@@ -46,7 +54,7 @@ html, body {
 
 .sc-tab {
   flex: 1;
-  padding: 10px 12px;
+  padding: 5.75px 12px;
   font: inherit;
   font-size: 12px;
   font-weight: 500;
@@ -72,38 +80,32 @@ html, body {
 .sc-search {
   display: flex;
   gap: 6px;
-  padding: 12px 14px;
+  padding: 11.5px 14px;
   border-bottom: 1px solid var(--border);
 }
 
-.sc-engine {
+.sc-search-engine-switcher {
   flex: none;
+  margin-left: 2px;
   appearance: none;
   -webkit-appearance: none;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 5px;
-  background: #ececec;
-  border: none;
-  border-radius: 4px;
-  color: #6b6b6b;
+  padding: 5px 8px;
+  background: var(--btn-bg);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: 999px;
+  color: var(--muted);
   cursor: pointer;
 }
 
-.sc-engine:focus { outline: none; }
-.sc-engine:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sc-search-engine-switcher:focus { outline: none; }
+.sc-search-engine-switcher:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-@media (prefers-color-scheme: dark) {
-  .sc-engine { background: #2f2f37; color: #c8c8c8; }
-}
+.sc-search-engine-switcher:hover { background: var(--btn-bg-hover); }
 
-.sc-engine:hover { background: #e0e0e0; }
-@media (prefers-color-scheme: dark) {
-  .sc-engine:hover { background: #3a3944; }
-}
-
-.sc-engine-circle {
+.sc-search-engine-switcher-circle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -119,10 +121,11 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 6px 4px 4px;
+  padding: 4px 4px 4px 4px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 999px;
+  box-shadow: 0 0 6px rgba(0,0,0,0.05);
 }
 
 .sc-input-wrap:focus-within {
@@ -141,18 +144,33 @@ html, body {
   outline: none;
 }
 
-.sc-search button[type="submit"] {
-  padding: 8px 12px;
-  font-size: 13px;
-  color: #fff;
-  background: var(--accent);
+.sc-submit {
+  flex: none;
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: 50%;
+  color: var(--muted);
   cursor: pointer;
 }
 
+.sc-submit:hover { color: var(--accent); background: rgba(0,0,0,0.05); }
+@media (prefers-color-scheme: dark) {
+  .sc-submit:hover { background: rgba(255,255,255,0.08); }
+}
+
+.sc-submit:focus { outline: none; }
+.sc-submit:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 .sc-content {
-  padding: 4px 0;
+  padding: 0 0 4px;
 }
 
 .sc-section {
@@ -163,12 +181,16 @@ html, body {
 .sc-section:last-child { border-bottom: none; }
 
 .sc-section h2 {
-  margin: 0 0 8px;
+  position: sticky;
+  top: var(--sticky-header, 86px);
+  z-index: 5;
+  margin: -12px -14px 8px;
+  padding: 8px 14px;
+  background: #f6f7f9;
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   color: var(--muted);
-  text-transform: uppercase;
 }
 
 .sc-list {
@@ -180,12 +202,28 @@ html, body {
 .sc-list li + li { margin-top: 2px; }
 
 .sc-list a {
-  display: block;
-  padding: 8px 10px;
-  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px 8px 13px;
+  border-radius: var(--suggestion-radius, 6px);
   color: var(--fg);
   text-decoration: none;
 }
+
+.sc-list a[data-q]::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  color: var(--muted);
+  -webkit-mask: url(../images/search-icon.svg) center / contain no-repeat;
+          mask: url(../images/search-icon.svg) center / contain no-repeat;
+}
+
+.sc-list a > span:not(.sc-meta):first-of-type,
+.sc-list a > .sc-title { flex: 1; min-width: 0; }
 
 .sc-list .sc-title {
   display: block;
@@ -201,9 +239,42 @@ html, body {
   color: var(--muted);
 }
 
+.sc-more {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 280ms ease;
+}
+.sc-more > * {
+  overflow: hidden;
+  min-height: 0;
+}
+.sc-more.is-open {
+  grid-template-rows: 1fr;
+}
+
+.sc-show-more {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-block;
+  margin: 6px 0 0 27px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.sc-show-more:hover { background: var(--hover); }
+.sc-show-more:focus { outline: none; }
+.sc-show-more:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
 .sc-list a:hover,
 .sc-list a:focus {
-  background: var(--hover);
+  background: var(--btn-bg);
   color: var(--accent);
   outline: none;
 }

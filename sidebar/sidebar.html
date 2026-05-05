@@ -14,8 +14,8 @@
 
     <form class="sc-search" id="searchForm" role="search">
       <div class="sc-input-wrap">
-        <button type="button" class="sc-engine" id="engineBtn" aria-label="Change search engine" aria-haspopup="menu">
-        <span class="sc-engine-circle" aria-hidden="true">
+        <button type="button" class="sc-search-engine-switcher" id="searchEngineSwitcherBtn" aria-label="Change search engine" aria-haspopup="menu">
+        <span class="sc-search-engine-switcher-circle" aria-hidden="true">
           <svg viewBox="0 0 18 18" width="12" height="12">
             <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62z"/>
             <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.8.54-1.84.86-3.05.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.32A8.99 8.99 0 0 0 9 18z"/>
@@ -23,7 +23,7 @@
             <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.46 3.44 1.35l2.58-2.58A8.97 8.97 0 0 0 9 0 8.99 8.99 0 0 0 .96 4.96l3.01 2.32C4.68 5.16 6.66 3.58 9 3.58z"/>
           </svg>
         </span>
-        <svg class="sc-engine-chevron" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+        <svg class="sc-search-engine-switcher-chevron" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
           <path d="M2 4.5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
@@ -35,23 +35,16 @@
           autocomplete="off"
           spellcheck="false"
         />
+        <button type="submit" class="sc-submit" aria-label="Search">
+          <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true">
+            <path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
       </div>
-      <button type="submit" aria-label="Search">Go</button>
     </form>
   </header>
 
   <div class="sc-content" id="tab-current" role="tabpanel" aria-labelledby="tabbtn-current">
-    <section class="sc-section" aria-label="Search history">
-      <h2>Search history</h2>
-      <ul class="sc-list" id="historyList">
-        <li><a href="#" data-q="best noise cancelling headphones 2026"><span class="sc-title">best noise cancelling headphones 2026</span><span class="sc-meta">2 hours ago</span></a></li>
-        <li><a href="#" data-q="sony wh-1000xm6 review"><span class="sc-title">sony wh-1000xm6 review</span><span class="sc-meta">Yesterday</span></a></li>
-        <li><a href="#" data-q="bose quietcomfort ultra vs sony"><span class="sc-title">bose quietcomfort ultra vs sony</span><span class="sc-meta">Yesterday</span></a></li>
-        <li><a href="#" data-q="how to clean over-ear headphone pads"><span class="sc-title">how to clean over-ear headphone pads</span><span class="sc-meta">Tuesday</span></a></li>
-        <li><a href="#" data-q="airpods max 2 release date"><span class="sc-title">airpods max 2 release date</span><span class="sc-meta">Last week</span></a></li>
-      </ul>
-    </section>
-
     <section class="sc-section" aria-label="Suggested next searches">
       <h2>Suggested next searches</h2>
       <ul class="sc-list" id="suggestionsList">
@@ -61,6 +54,41 @@
         <li><a href="#" data-q="ldac vs aptx adaptive audio quality">ldac vs aptx adaptive audio quality</a></li>
         <li><a href="#" data-q="how long do bluetooth headphones last">how long do bluetooth headphones last</a></li>
       </ul>
+      <div class="sc-more">
+        <ul class="sc-list">
+          <li><a href="#" data-q="do noise cancelling headphones damage hearing">do noise cancelling headphones damage hearing</a></li>
+          <li><a href="#" data-q="best headphones for working from home">best headphones for working from home</a></li>
+          <li><a href="#" data-q="wireless earbuds vs over-ear comparison">wireless earbuds vs over-ear comparison</a></li>
+          <li><a href="#" data-q="headphone burn-in real or myth">headphone burn-in real or myth</a></li>
+          <li><a href="#" data-q="sennheiser momentum 4 wireless review">sennheiser momentum 4 wireless review</a></li>
+          <li><a href="#" data-q="apple music lossless on bluetooth">apple music lossless on bluetooth</a></li>
+          <li><a href="#" data-q="how to fix sticky headphone pads">how to fix sticky headphone pads</a></li>
+        </ul>
+      </div>
+      <button type="button" class="sc-show-more" aria-expanded="false">Show more</button>
+    </section>
+
+    <section class="sc-section" aria-label="Search history">
+      <h2>Search history</h2>
+      <ul class="sc-list" id="historyList">
+        <li><a href="#" data-q="best noise cancelling headphones 2026"><span class="sc-title">best noise cancelling headphones 2026</span><span class="sc-meta">2 hours ago</span></a></li>
+        <li><a href="#" data-q="sony wh-1000xm6 review"><span class="sc-title">sony wh-1000xm6 review</span><span class="sc-meta">Yesterday</span></a></li>
+        <li><a href="#" data-q="bose quietcomfort ultra vs sony"><span class="sc-title">bose quietcomfort ultra vs sony</span><span class="sc-meta">Yesterday</span></a></li>
+        <li><a href="#" data-q="how to clean over-ear headphone pads"><span class="sc-title">how to clean over-ear headphone pads</span><span class="sc-meta">Tuesday</span></a></li>
+        <li><a href="#" data-q="airpods max 2 release date"><span class="sc-title">airpods max 2 release date</span><span class="sc-meta">Last week</span></a></li>
+      </ul>
+      <div class="sc-more">
+        <ul class="sc-list">
+          <li><a href="#" data-q="anc test youtube channels"><span class="sc-title">anc test youtube channels</span><span class="sc-meta">Last week</span></a></li>
+          <li><a href="#" data-q="best wired headphones for mixing"><span class="sc-title">best wired headphones for mixing</span><span class="sc-meta">2 weeks ago</span></a></li>
+          <li><a href="#" data-q="headphone amp dac combo under 300"><span class="sc-title">headphone amp dac combo under 300</span><span class="sc-meta">2 weeks ago</span></a></li>
+          <li><a href="#" data-q="audeze maxwell vs hd 800s"><span class="sc-title">audeze maxwell vs hd 800s</span><span class="sc-meta">3 weeks ago</span></a></li>
+          <li><a href="#" data-q="hifiman ananda nano impressions"><span class="sc-title">hifiman ananda nano impressions</span><span class="sc-meta">3 weeks ago</span></a></li>
+          <li><a href="#" data-q="r/headphones budget recommendations"><span class="sc-title">r/headphones budget recommendations</span><span class="sc-meta">Last month</span></a></li>
+          <li><a href="#" data-q="how to spot fake sony headphones"><span class="sc-title">how to spot fake sony headphones</span><span class="sc-meta">Last month</span></a></li>
+        </ul>
+      </div>
+      <button type="button" class="sc-show-more" aria-expanded="false">Show more</button>
     </section>
 
     <section class="sc-section" aria-label="From Firefox">
@@ -71,6 +99,17 @@
         <li><a href="https://www.reddit.com/r/headphones/comments/xm6_impressions/"><span class="sc-title">XM6 first impressions thread</span><span class="sc-meta">reddit.com · Open tab</span></a></li>
         <li><a href="https://en.wikipedia.org/wiki/Active_noise_control"><span class="sc-title">Active noise control — Wikipedia</span><span class="sc-meta">wikipedia.org · History</span></a></li>
       </ul>
+      <div class="sc-more">
+        <ul class="sc-list">
+          <li><a href="https://www.whathifi.com/awards/2026/headphones"><span class="sc-title">What Hi-Fi? Headphone Awards 2026</span><span class="sc-meta">whathifi.com · Bookmark</span></a></li>
+          <li><a href="https://crinacle.com/rankings/headphones/"><span class="sc-title">Crinacle's headphone rankings</span><span class="sc-meta">crinacle.com · Recently visited</span></a></li>
+          <li><a href="https://www.head-fi.org/threads/sony-wh-1000xm6-impressions.123456/"><span class="sc-title">Sony WH-1000XM6 impressions — Head-Fi</span><span class="sc-meta">head-fi.org · Open tab</span></a></li>
+          <li><a href="https://www.amazon.co.uk/wishlist/headphones-shortlist"><span class="sc-title">Headphones shortlist</span><span class="sc-meta">amazon.co.uk · Bookmark</span></a></li>
+          <li><a href="https://www.youtube.com/@DMSReviews"><span class="sc-title">DMS Reviews — YouTube</span><span class="sc-meta">youtube.com · History</span></a></li>
+          <li><a href="https://en.wikipedia.org/wiki/Headphones"><span class="sc-title">Headphones — Wikipedia</span><span class="sc-meta">wikipedia.org · History</span></a></li>
+        </ul>
+      </div>
+      <button type="button" class="sc-show-more" aria-expanded="false">Show more</button>
     </section>
   </div>
 
@@ -84,6 +123,17 @@
         <li><a href="#" data-q="oled vs miniled monitor 2026"><span class="sc-title">oled vs miniled monitor 2026</span><span class="sc-meta">Saved 14 Apr · Shopping</span></a></li>
         <li><a href="#" data-q="learn rust in 30 days roadmap"><span class="sc-title">learn rust in 30 days roadmap</span><span class="sc-meta">Saved 2 Apr · Learning</span></a></li>
       </ul>
+      <div class="sc-more">
+        <ul class="sc-list">
+          <li><a href="#" data-q="noise cancelling earbuds for the gym"><span class="sc-title">noise cancelling earbuds for the gym</span><span class="sc-meta">Saved 27 Mar · Shopping</span></a></li>
+          <li><a href="#" data-q="best swiss army knife for travel"><span class="sc-title">best swiss army knife for travel</span><span class="sc-meta">Saved 19 Mar · Travel</span></a></li>
+          <li><a href="#" data-q="kombucha second fermentation flavours"><span class="sc-title">kombucha second fermentation flavours</span><span class="sc-meta">Saved 12 Mar · Cooking</span></a></li>
+          <li><a href="#" data-q="vue 3 composition api patterns"><span class="sc-title">vue 3 composition api patterns</span><span class="sc-meta">Saved 5 Mar · Work</span></a></li>
+          <li><a href="#" data-q="iceland ring road 7 day itinerary"><span class="sc-title">iceland ring road 7 day itinerary</span><span class="sc-meta">Saved 1 Mar · Travel</span></a></li>
+          <li><a href="#" data-q="learn neovim shortcuts cheatsheet"><span class="sc-title">learn neovim shortcuts cheatsheet</span><span class="sc-meta">Saved 22 Feb · Learning</span></a></li>
+        </ul>
+      </div>
+      <button type="button" class="sc-show-more" aria-expanded="false">Show more</button>
     </section>
   </div>
 

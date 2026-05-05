@@ -57,5 +57,43 @@ browser.runtime.onMessage.addListener((msg) => {
   }
 });
 
+document.querySelectorAll(".sc-show-more").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const more = btn.previousElementSibling;
+    if (!more || !more.classList.contains("sc-more")) return;
+    const open = more.classList.toggle("is-open");
+    btn.textContent = open ? "Show less" : "Show more";
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+});
+
+const stickyHead = document.querySelector(".sc-stickyhead");
+function updateStickyOffset() {
+  document.documentElement.style.setProperty("--sticky-header", stickyHead.offsetHeight + "px");
+}
+updateStickyOffset();
+new ResizeObserver(updateStickyOffset).observe(stickyHead);
+
+function updateSuggestionRadius() {
+  const sample = document.querySelector("#suggestionsList a");
+  if (!sample) return;
+  const ul = sample.parentNode.parentNode;
+  const li = document.createElement("li");
+  const probe = sample.cloneNode(false);
+  probe.textContent = "x";
+  probe.style.whiteSpace = "nowrap";
+  probe.style.visibility = "hidden";
+  li.style.visibility = "hidden";
+  li.appendChild(probe);
+  ul.appendChild(li);
+  const h = probe.getBoundingClientRect().height;
+  ul.removeChild(li);
+  if (h > 0) {
+    document.documentElement.style.setProperty("--suggestion-radius", (h / 2) + "px");
+  }
+}
+updateSuggestionRadius();
+new ResizeObserver(updateSuggestionRadius).observe(document.body);
+
 syncFromActiveTab();
 input.focus();

@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Search companion",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Companion sidebar that opens on Google search result pages.",
   "browser_specific_settings": {
     "gecko": {
@@ -14,8 +14,8 @@
     }
   },
   "icons": {
-    "48": "icons/icon-48.png",
-    "96": "icons/icon-96.png"
+    "48": "images/search-icon.svg",
+    "96": "images/search-icon.svg"
   },
   "permissions": [
     "tabs",
@@ -26,14 +26,14 @@
   "browser_action": {
     "default_title": "Search companion",
     "default_icon": {
-      "48": "icons/icon-48.png",
-      "96": "icons/icon-96.png"
+      "48": "images/search-icon.svg",
+      "96": "images/search-icon.svg"
     }
   },
   "sidebar_action": {
     "default_title": "Search companion",
     "default_panel": "sidebar/sidebar.html",
-    "default_icon": "icons/icon-48.png",
+    "default_icon": "images/search-icon.svg",
     "open_at_install": true
   },
   "background": {
