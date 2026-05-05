@@ -1,0 +1,12 @@
+{
+  "addons": {
+    "search-companion@paulannett.co.uk": {
+      "updates": [
+        {
+          "version": "1.0.0",
+          "update_link": "https://octopuxltd.github.io/search-companion/search-companion-1.0.0.xpi"
+        }
+      ]
+    }
+  }
+}
