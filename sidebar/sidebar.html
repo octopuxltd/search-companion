@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Search companion</title>
+  <link rel="stylesheet" href="sidebar.css" />
+</head>
+<body>
+  <nav class="sc-tabs" role="tablist" aria-label="Views">
+    <button class="sc-tab is-active" role="tab" aria-selected="true" aria-controls="tab-current" id="tabbtn-current" data-tab="current">Current search</button>
+    <button class="sc-tab" role="tab" aria-selected="false" aria-controls="tab-saved" id="tabbtn-saved" data-tab="saved">Saved searches</button>
+  </nav>
+
+  <form class="sc-search" id="searchForm" role="search">
+    <input
+      type="search"
+      id="searchInput"
+      name="q"
+      placeholder="Search..."
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <button type="submit" aria-label="Search">Go</button>
+  </form>
+
+  <div class="sc-content" id="tab-current" role="tabpanel" aria-labelledby="tabbtn-current">
+    <section class="sc-section" aria-label="Search history">
+      <h2>Search history</h2>
+      <ul class="sc-list" id="historyList">
+        <li><a href="#" data-q="best noise cancelling headphones 2026"><span class="sc-title">best noise cancelling headphones 2026</span><span class="sc-meta">2 hours ago</span></a></li>
+        <li><a href="#" data-q="sony wh-1000xm6 review"><span class="sc-title">sony wh-1000xm6 review</span><span class="sc-meta">Yesterday</span></a></li>
+        <li><a href="#" data-q="bose quietcomfort ultra vs sony"><span class="sc-title">bose quietcomfort ultra vs sony</span><span class="sc-meta">Yesterday</span></a></li>
+        <li><a href="#" data-q="how to clean over-ear headphone pads"><span class="sc-title">how to clean over-ear headphone pads</span><span class="sc-meta">Tuesday</span></a></li>
+        <li><a href="#" data-q="airpods max 2 release date"><span class="sc-title">airpods max 2 release date</span><span class="sc-meta">Last week</span></a></li>
+      </ul>
+    </section>
+
+    <section class="sc-section" aria-label="Suggested next searches">
+      <h2>Suggested next searches</h2>
+      <ul class="sc-list" id="suggestionsList">
+        <li><a href="#" data-q="best wireless headphones under £200">best wireless headphones under £200</a></li>
+        <li><a href="#" data-q="noise cancelling headphones for flights">noise cancelling headphones for flights</a></li>
+        <li><a href="#" data-q="open-back vs closed-back headphones">open-back vs closed-back headphones</a></li>
+        <li><a href="#" data-q="ldac vs aptx adaptive audio quality">ldac vs aptx adaptive audio quality</a></li>
+        <li><a href="#" data-q="how long do bluetooth headphones last">how long do bluetooth headphones last</a></li>
+      </ul>
+    </section>
+
+    <section class="sc-section" aria-label="From Firefox">
+      <h2>From Firefox</h2>
+      <ul class="sc-list" id="firefoxList">
+        <li><a href="https://www.rtings.com/headphones/reviews/sony/wh-1000xm6-wireless"><span class="sc-title">Sony WH-1000XM6 Wireless Review</span><span class="sc-meta">rtings.com · Bookmark</span></a></li>
+        <li><a href="https://www.theverge.com/24179999/best-noise-cancelling-headphones"><span class="sc-title">The best noise-cancelling headphones to buy</span><span class="sc-meta">theverge.com · Recently visited</span></a></li>
+        <li><a href="https://www.reddit.com/r/headphones/comments/xm6_impressions/"><span class="sc-title">XM6 first impressions thread</span><span class="sc-meta">reddit.com · Open tab</span></a></li>
+        <li><a href="https://en.wikipedia.org/wiki/Active_noise_control"><span class="sc-title">Active noise control — Wikipedia</span><span class="sc-meta">wikipedia.org · History</span></a></li>
+      </ul>
+    </section>
+  </div>
+
+  <div class="sc-content" id="tab-saved" role="tabpanel" aria-labelledby="tabbtn-saved" hidden>
+    <section class="sc-section" aria-label="Saved searches">
+      <h2>Saved searches</h2>
+      <ul class="sc-list" id="savedList">
+        <li><a href="#" data-q="weekend hikes near peak district"><span class="sc-title">weekend hikes near peak district</span><span class="sc-meta">Saved 3 May · Travel</span></a></li>
+        <li><a href="#" data-q="typescript satisfies operator examples"><span class="sc-title">typescript satisfies operator examples</span><span class="sc-meta">Saved 28 Apr · Work</span></a></li>
+        <li><a href="#" data-q="best sourdough recipe overnight"><span class="sc-title">best sourdough recipe overnight</span><span class="sc-meta">Saved 21 Apr · Cooking</span></a></li>
+        <li><a href="#" data-q="oled vs miniled monitor 2026"><span class="sc-title">oled vs miniled monitor 2026</span><span class="sc-meta">Saved 14 Apr · Shopping</span></a></li>
+        <li><a href="#" data-q="learn rust in 30 days roadmap"><span class="sc-title">learn rust in 30 days roadmap</span><span class="sc-meta">Saved 2 Apr · Learning</span></a></li>
+      </ul>
+    </section>
+  </div>
+
+  <script src="sidebar.js"></script>
+</body>
+</html>

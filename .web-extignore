@@ -1,0 +1,8 @@
+.web-extignore
+.gitignore
+.git
+.DS_Store
+web-ext-artifacts
+*.zip
+*.xpi
+README*
