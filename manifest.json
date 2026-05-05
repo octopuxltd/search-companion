@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Search companion",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Companion sidebar that opens on Google search result pages.",
   "browser_specific_settings": {
     "gecko": {
@@ -34,7 +34,7 @@
     "default_title": "Search companion",
     "default_panel": "sidebar/sidebar.html",
     "default_icon": "icons/icon-48.png",
-    "open_at_install": false
+    "open_at_install": true
   },
   "background": {
     "scripts": ["background.js"]

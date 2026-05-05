@@ -3,6 +3,7 @@
 .git
 .DS_Store
 web-ext-artifacts
+docs/**
 *.zip
 *.xpi
 README*

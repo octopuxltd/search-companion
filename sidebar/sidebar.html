@@ -6,22 +6,39 @@
   <link rel="stylesheet" href="sidebar.css" />
 </head>
 <body>
-  <nav class="sc-tabs" role="tablist" aria-label="Views">
-    <button class="sc-tab is-active" role="tab" aria-selected="true" aria-controls="tab-current" id="tabbtn-current" data-tab="current">Current search</button>
-    <button class="sc-tab" role="tab" aria-selected="false" aria-controls="tab-saved" id="tabbtn-saved" data-tab="saved">Saved searches</button>
-  </nav>
+  <header class="sc-stickyhead">
+    <nav class="sc-tabs" role="tablist" aria-label="Views">
+      <button class="sc-tab is-active" role="tab" aria-selected="true" aria-controls="tab-current" id="tabbtn-current" data-tab="current">Current search</button>
+      <button class="sc-tab" role="tab" aria-selected="false" aria-controls="tab-saved" id="tabbtn-saved" data-tab="saved">Saved searches</button>
+    </nav>
 
-  <form class="sc-search" id="searchForm" role="search">
-    <input
-      type="search"
-      id="searchInput"
-      name="q"
-      placeholder="Search..."
-      autocomplete="off"
-      spellcheck="false"
-    />
-    <button type="submit" aria-label="Search">Go</button>
-  </form>
+    <form class="sc-search" id="searchForm" role="search">
+      <div class="sc-input-wrap">
+        <button type="button" class="sc-engine" id="engineBtn" aria-label="Change search engine" aria-haspopup="menu">
+        <span class="sc-engine-circle" aria-hidden="true">
+          <svg viewBox="0 0 18 18" width="12" height="12">
+            <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62z"/>
+            <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.8.54-1.84.86-3.05.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.32A8.99 8.99 0 0 0 9 18z"/>
+            <path fill="#FBBC05" d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.96H.96A8.99 8.99 0 0 0 0 9c0 1.45.35 2.82.96 4.04l3.01-2.32z"/>
+            <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.46 3.44 1.35l2.58-2.58A8.97 8.97 0 0 0 9 0 8.99 8.99 0 0 0 .96 4.96l3.01 2.32C4.68 5.16 6.66 3.58 9 3.58z"/>
+          </svg>
+        </span>
+        <svg class="sc-engine-chevron" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+          <path d="M2 4.5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+        <input
+          type="search"
+          id="searchInput"
+          name="q"
+          placeholder="Search with Google"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+      <button type="submit" aria-label="Search">Go</button>
+    </form>
+  </header>
 
   <div class="sc-content" id="tab-current" role="tabpanel" aria-labelledby="tabbtn-current">
     <section class="sc-section" aria-label="Search history">
