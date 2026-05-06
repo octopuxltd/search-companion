@@ -3,13 +3,490 @@
 <head>
   <meta charset="utf-8" />
   <title>Search companion</title>
-  <link rel="stylesheet" href="sidebar.css" />
+  <style>
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #6b6b6b;
+  --border: #ccc;
+  --accent: #1a73e8;
+  --hover: #f4f6fa;
+
+  /* Default solid-button background and its hover state.
+     Use these for any pill/chip-style button (e.g. .sc-search-engine-switcher)
+     so button colours stay consistent across the UI. Override per-mode below. */
+  --btn-bg: #f6f7f8;
+  --btn-bg-hover: #dcdedf;
+
+  /* Sticky section heading background — a slight tint over the body bg.
+     Dark mode flips polarity so it stays visible. */
+  --heading-bg: #f6f6f6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1b22;
+    --fg: #f5f5f5;
+    --muted: #a8a8a8;
+    --border: #3a3944;
+    --accent: #8ab4f8;
+    --hover: #2a2933;
+    --btn-bg: #2f2f37;
+    --btn-bg-hover: #3a3944;
+    --heading-bg: #27262d;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+.sc-stickyhead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+}
+
+.sc-stickyhead .sc-search { border-bottom: none; }
+
+.sc-tabs {
+  display: flex;
+  position: relative;
+}
+
+.sc-tab {
+  flex: 1;
+  padding: 5.75px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.sc-tab:hover { color: var(--fg); border-bottom-color: var(--fg); }
+
+.sc-tab-icon {
+  /* Icon-only tab: auto width so it doesn't share the equal flex of text tabs. */
+  flex: 0 0 auto;
+  padding: 5.75px 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sc-tab.is-active {
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 4.75px; /* compensate for the 1px-thicker active underline */
+}
+
+.sc-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.sc-search {
+  display: flex;
+  gap: 6px;
+  padding: 11.5px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sc-search-engine-switcher {
+  flex: none;
+  margin-left: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  background: var(--btn-bg);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.sc-search-engine-switcher:focus { outline: none; }
+.sc-search-engine-switcher:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.sc-search-engine-switcher:hover { background: var(--btn-bg-hover); }
+
+.sc-search-engine-switcher-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+}
+
+.sc-input-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: 0 0 6px rgba(0,0,0,0.05);
+}
+
+.sc-input-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent),
+    0 0 14px 2px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.sc-search input[type="search"] {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 4px 3px;
+  font-size: 13px;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.sc-search input[type="search"]::-webkit-search-cancel-button,
+.sc-search input[type="search"]::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.sc-search input[type="search"]::-moz-search-clear-button { display: none; }
+
+.sc-submit {
+  flex: none;
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.sc-submit:hover { color: var(--accent); background: rgba(0,0,0,0.05); }
+@media (prefers-color-scheme: dark) {
+  .sc-submit:hover { background: rgba(255,255,255,0.08); }
+}
+
+.sc-submit:focus { outline: none; }
+.sc-submit:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.sc-content {
+  padding: 0 0 4px;
+}
+
+.sc-section {
+  padding: 12px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sc-section:last-child { border-bottom: none; }
+
+.sc-section h2 {
+  position: sticky;
+  top: var(--sticky-header, 86px);
+  z-index: 5;
+  margin: -12px -6px 8px;
+  padding: 8px 14px;
+  background: var(--heading-bg);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.sc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sc-list li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: var(--suggestion-radius, 17px);
+}
+
+/* Rows without a meta span need extra right padding inside the link
+   so the menu icon doesn't overlap text on hover. */
+.sc-list li:not(:has(> .sc-meta)) > a {
+  padding-right: 36px;
+}
+
+.sc-list li + li { margin-top: 2px; }
+
+.sc-list li:hover,
+.sc-list li:focus-within {
+  background: var(--btn-bg);
+}
+.sc-list li:hover > a,
+.sc-list li:focus-within > a {
+  color: var(--accent);
+}
+
+.sc-list a {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px 8px 13px;
+  color: var(--fg);
+  text-decoration: none;
+  outline: none;
+  border-radius: inherit;
+}
+
+.sc-list a[data-q]::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  color: var(--muted);
+  -webkit-mask: url("data:image/svg+xml;utf8,%3Csvg%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2032%2032%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M13.0638%200.460632H13.0679V0.462443C16.6369%200.463477%2019.8686%201.9111%2022.2073%204.25025C24.542%206.58605%2025.9884%209.81494%2025.9907%2013.3811H25.9925V13.3896V13.4H25.9907C25.9894%2014.8372%2025.7535%2016.2205%2025.3198%2017.5103C25.2471%2017.7268%2025.171%2017.9347%2025.0929%2018.1334V18.1352C24.7189%2019.0818%2024.2355%2019.9767%2023.6582%2020.801L31.1801%2027.5617L31.1847%2027.5658L31.2253%2027.6036L31.2282%2027.6064C31.6529%2028.0107%2031.8841%2028.552%2031.9133%2029.1013C31.9418%2029.6445%2031.7729%2030.2001%2031.4015%2030.6457L31.3986%2030.6498L31.3534%2030.7023L31.3443%2030.7114L31.3066%2030.7528L31.3024%2030.7582C30.8976%2031.1829%2030.3573%2031.4136%2029.8075%2031.4426C29.2651%2031.4713%2028.709%2031.3029%2028.2631%2030.931L28.2592%2030.9281L28.2065%2030.8829L28.199%2030.8767L20.5057%2023.9621C20.2781%2024.1225%2020.0458%2024.2748%2019.8107%2024.4186C19.4918%2024.6139%2019.1615%2024.7978%2018.8245%2024.9657C17.0918%2025.83%2015.1339%2026.3163%2013.064%2026.3163V26.3181H13.0599V26.3163C9.49088%2026.3153%206.25863%2024.8676%203.91999%2022.5285C1.58445%2020.1927%200.138904%2016.9633%200.136576%2013.3982H0.134766V13.3896V13.3855H0.136576C0.137611%209.81649%201.58523%206.58424%203.92439%204.2456C6.26018%201.9111%209.48907%200.464771%2013.0552%200.462443V0.460632H13.0638ZM13.0679%203.36001V3.36182H13.0638H13.0552V3.36001C10.2914%203.36182%207.78617%204.4851%205.97257%206.29792C4.15923%208.11074%203.03492%2010.6185%203.03414%2013.3857H3.03595V13.3899V13.3984H3.03414C3.03595%2016.1623%204.15846%2018.6662%205.97206%2020.4803C7.78488%2022.2939%2010.2927%2023.4182%2013.0596%2023.4187V23.4169H13.0638H13.0723V23.4187C15.8361%2023.4169%2018.3403%2022.2942%2020.1544%2020.4808C21.9678%2018.668%2023.0921%2016.161%2023.0926%2013.394H23.091V13.3899V13.3814H23.0926C23.091%2010.6175%2021.9675%208.1123%2020.1549%206.2987C18.3421%204.4851%2015.8351%203.36078%2013.0679%203.36001Z%22%20fill%3D%22black%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml;utf8,%3Csvg%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2032%2032%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M13.0638%200.460632H13.0679V0.462443C16.6369%200.463477%2019.8686%201.9111%2022.2073%204.25025C24.542%206.58605%2025.9884%209.81494%2025.9907%2013.3811H25.9925V13.3896V13.4H25.9907C25.9894%2014.8372%2025.7535%2016.2205%2025.3198%2017.5103C25.2471%2017.7268%2025.171%2017.9347%2025.0929%2018.1334V18.1352C24.7189%2019.0818%2024.2355%2019.9767%2023.6582%2020.801L31.1801%2027.5617L31.1847%2027.5658L31.2253%2027.6036L31.2282%2027.6064C31.6529%2028.0107%2031.8841%2028.552%2031.9133%2029.1013C31.9418%2029.6445%2031.7729%2030.2001%2031.4015%2030.6457L31.3986%2030.6498L31.3534%2030.7023L31.3443%2030.7114L31.3066%2030.7528L31.3024%2030.7582C30.8976%2031.1829%2030.3573%2031.4136%2029.8075%2031.4426C29.2651%2031.4713%2028.709%2031.3029%2028.2631%2030.931L28.2592%2030.9281L28.2065%2030.8829L28.199%2030.8767L20.5057%2023.9621C20.2781%2024.1225%2020.0458%2024.2748%2019.8107%2024.4186C19.4918%2024.6139%2019.1615%2024.7978%2018.8245%2024.9657C17.0918%2025.83%2015.1339%2026.3163%2013.064%2026.3163V26.3181H13.0599V26.3163C9.49088%2026.3153%206.25863%2024.8676%203.91999%2022.5285C1.58445%2020.1927%200.138904%2016.9633%200.136576%2013.3982H0.134766V13.3896V13.3855H0.136576C0.137611%209.81649%201.58523%206.58424%203.92439%204.2456C6.26018%201.9111%209.48907%200.464771%2013.0552%200.462443V0.460632H13.0638ZM13.0679%203.36001V3.36182H13.0638H13.0552V3.36001C10.2914%203.36182%207.78617%204.4851%205.97257%206.29792C4.15923%208.11074%203.03492%2010.6185%203.03414%2013.3857H3.03595V13.3899V13.3984H3.03414C3.03595%2016.1623%204.15846%2018.6662%205.97206%2020.4803C7.78488%2022.2939%2010.2927%2023.4182%2013.0596%2023.4187V23.4169H13.0638H13.0723V23.4187C15.8361%2023.4169%2018.3403%2022.2942%2020.1544%2020.4808C21.9678%2018.668%2023.0921%2016.161%2023.0926%2013.394H23.091V13.3899V13.3814H23.0926C23.091%2010.6175%2021.9675%208.1123%2020.1549%206.2987C18.3421%204.4851%2015.8351%203.36078%2013.0679%203.36001Z%22%20fill%3D%22black%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
+}
+
+.sc-list a > span:not(.sc-meta):first-of-type,
+.sc-list a > .sc-title { flex: 1; min-width: 0; }
+
+.sc-list .sc-title {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sc-list .sc-meta {
+  flex: none;
+  margin: 0;
+  padding-right: 10px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.sc-list li:hover > .sc-meta,
+.sc-list li:focus-within > .sc-meta {
+  visibility: hidden;
+}
+
+.sc-more {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 280ms ease;
+}
+.sc-more > * {
+  overflow: hidden;
+  min-height: 0;
+}
+.sc-more.is-open {
+  grid-template-rows: 1fr;
+}
+
+.sc-show-more {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-block;
+  margin: 6px 0 0 27px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.sc-show-more:hover { background: var(--hover); }
+.sc-show-more:focus { outline: none; }
+.sc-show-more:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.sc-row-menu {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: pointer;
+  visibility: hidden;
+}
+
+.sc-list li:hover .sc-row-menu,
+.sc-list li:focus-within .sc-row-menu,
+.sc-row-menu:focus-visible {
+  visibility: visible;
+}
+
+.sc-row-menu:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--fg);
+}
+@media (prefers-color-scheme: dark) {
+  .sc-row-menu:hover { background: rgba(255, 255, 255, 0.10); }
+}
+
+.sc-row-menu:focus { outline: none; }
+.sc-row-menu:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.sc-help {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+body.is-advanced .sc-search,
+body.is-settings .sc-search { display: none; }
+
+.sc-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.sc-field > input[type="text"],
+.sc-field > select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+}
+
+.sc-field > select {
+  padding-right: 28px;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12'%3E%3Cpath d='M2 4.5l4 4 4-4' fill='none' stroke='%236b6b6b' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  cursor: pointer;
+}
+
+.sc-field > input[type="text"]:focus,
+.sc-field > select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.sc-field-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.sc-advanced-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.sc-btn-primary,
+.sc-btn-secondary {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.sc-btn-primary {
+  color: #fff;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+}
+.sc-btn-primary:hover { filter: brightness(1.05); }
+
+.sc-btn-secondary {
+  color: var(--fg);
+  background: var(--btn-bg);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+.sc-btn-secondary:hover { background: var(--btn-bg-hover); }
+
+.sc-btn-primary:focus-visible,
+.sc-btn-secondary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+  </style>
 </head>
 <body>
   <header class="sc-stickyhead">
     <nav class="sc-tabs" role="tablist" aria-label="Views">
-      <button class="sc-tab is-active" role="tab" aria-selected="true" aria-controls="tab-current" id="tabbtn-current" data-tab="current">Current search</button>
+      <button class="sc-tab is-active" role="tab" aria-selected="true" aria-controls="tab-current" id="tabbtn-current" data-tab="current">Search</button>
+      <button class="sc-tab" role="tab" aria-selected="false" aria-controls="tab-advanced" id="tabbtn-advanced" data-tab="advanced">Advanced</button>
       <button class="sc-tab" role="tab" aria-selected="false" aria-controls="tab-saved" id="tabbtn-saved" data-tab="saved">Saved searches</button>
+      <button class="sc-tab sc-tab-icon" role="tab" aria-selected="false" aria-controls="tab-settings" id="tabbtn-settings" data-tab="settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
+            d="M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Zm7.4 2.5c0 .4-.04.79-.1 1.17l2 1.55a.5.5 0 0 1 .12.64l-1.9 3.28a.5.5 0 0 1-.6.22l-2.36-.95a7.4 7.4 0 0 1-2.02 1.17l-.36 2.51a.5.5 0 0 1-.5.41h-3.78a.5.5 0 0 1-.5-.41l-.36-2.51a7.4 7.4 0 0 1-2.02-1.17l-2.36.95a.5.5 0 0 1-.6-.22l-1.9-3.28a.5.5 0 0 1 .12-.64l2-1.55a7.4 7.4 0 0 1 0-2.34l-2-1.55a.5.5 0 0 1-.12-.64l1.9-3.28a.5.5 0 0 1 .6-.22l2.36.95a7.4 7.4 0 0 1 2.02-1.17l.36-2.51A.5.5 0 0 1 10.1 2h3.78a.5.5 0 0 1 .5.41l.36 2.51a7.4 7.4 0 0 1 2.02 1.17l2.36-.95a.5.5 0 0 1 .6.22l1.9 3.28a.5.5 0 0 1-.12.64l-2 1.55c.06.38.1.77.1 1.17Z"/>
+        </svg>
+      </button>
     </nav>
 
     <form class="sc-search" id="searchForm" role="search">
@@ -113,6 +590,115 @@
     </section>
   </div>
 
+  <div class="sc-content" id="tab-advanced" role="tabpanel" aria-labelledby="tabbtn-advanced" hidden>
+    <section class="sc-section sc-section-plain" aria-label="Advanced search">
+      <p class="sc-help">Build a more precise Google search using the fields below. Leave any field blank to skip it.</p>
+      <form class="sc-advanced" id="advancedForm">
+        <label class="sc-field">
+          <span>All these words</span>
+          <input type="text" name="all" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="sc-field">
+          <span>Exact phrase</span>
+          <input type="text" name="exact" autocomplete="off" spellcheck="false" placeholder="e.g. open source software" />
+        </label>
+        <label class="sc-field">
+          <span>Any of these words</span>
+          <input type="text" name="any" autocomplete="off" spellcheck="false" placeholder="e.g. cat dog rabbit" />
+        </label>
+        <label class="sc-field">
+          <span>None of these words</span>
+          <input type="text" name="none" autocomplete="off" spellcheck="false" placeholder="e.g. ads sponsored" />
+        </label>
+        <label class="sc-field">
+          <span>Site or domain</span>
+          <input type="text" name="site" autocomplete="off" spellcheck="false" placeholder="e.g. wikipedia.org" />
+        </label>
+        <label class="sc-field">
+          <span>Terms appear in</span>
+          <select name="where">
+            <option value="">anywhere</option>
+            <option value="intitle">page title</option>
+            <option value="inurl">URL</option>
+            <option value="intext">page text</option>
+            <option value="inanchor">link anchors</option>
+          </select>
+        </label>
+        <label class="sc-field">
+          <span>File type</span>
+          <select name="filetype">
+            <option value="">any</option>
+            <option value="pdf">PDF</option>
+            <option value="doc">Word (doc)</option>
+            <option value="docx">Word (docx)</option>
+            <option value="xls">Excel (xls)</option>
+            <option value="xlsx">Excel (xlsx)</option>
+            <option value="ppt">PowerPoint (ppt)</option>
+            <option value="pptx">PowerPoint (pptx)</option>
+            <option value="txt">Plain text</option>
+            <option value="csv">CSV</option>
+            <option value="rtf">RTF</option>
+          </select>
+        </label>
+        <label class="sc-field">
+          <span>Last updated</span>
+          <select name="time">
+            <option value="">any time</option>
+            <option value="h">past hour</option>
+            <option value="d">past 24 hours</option>
+            <option value="w">past week</option>
+            <option value="m">past month</option>
+            <option value="y">past year</option>
+          </select>
+        </label>
+        <label class="sc-field">
+          <span>Region</span>
+          <select name="region">
+            <option value="">any</option>
+            <option value="countryUK">United Kingdom</option>
+            <option value="countryUS">United States</option>
+            <option value="countryCA">Canada</option>
+            <option value="countryAU">Australia</option>
+            <option value="countryNZ">New Zealand</option>
+            <option value="countryDE">Germany</option>
+            <option value="countryFR">France</option>
+            <option value="countryJP">Japan</option>
+          </select>
+        </label>
+        <label class="sc-field">
+          <span>Language</span>
+          <select name="lang">
+            <option value="">any</option>
+            <option value="lang_en">English</option>
+            <option value="lang_es">Spanish</option>
+            <option value="lang_fr">French</option>
+            <option value="lang_de">German</option>
+            <option value="lang_it">Italian</option>
+            <option value="lang_pt">Portuguese</option>
+            <option value="lang_nl">Dutch</option>
+            <option value="lang_ja">Japanese</option>
+            <option value="lang_zh-CN">Chinese (simplified)</option>
+            <option value="lang_zh-TW">Chinese (traditional)</option>
+          </select>
+        </label>
+        <label class="sc-field sc-field-row">
+          <input type="checkbox" name="safe" />
+          <span>SafeSearch on</span>
+        </label>
+        <div class="sc-advanced-actions">
+          <button type="reset" class="sc-btn-secondary">Reset</button>
+          <button type="submit" class="sc-btn-primary">Search Google</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="sc-content" id="tab-settings" role="tabpanel" aria-labelledby="tabbtn-settings" hidden>
+    <section class="sc-section sc-section-plain" aria-label="Settings">
+      <p class="sc-help">Settings will go here — default search engine, suggestion sources, sync, keyboard shortcuts, and theme.</p>
+    </section>
+  </div>
+
   <div class="sc-content" id="tab-saved" role="tabpanel" aria-labelledby="tabbtn-saved" hidden>
     <section class="sc-section" aria-label="Saved searches">
       <h2>Saved searches</h2>
@@ -137,6 +723,249 @@
     </section>
   </div>
 
-  <script src="sidebar.js"></script>
+  <script>
+// Stub the `browser.*` API when running outside a Firefox extension (e.g. file://
+// preview, plain browser). Lets the rest of the script run for layout/UX work.
+if (typeof browser === "undefined") {
+  window.browser = {
+    tabs: { update: () => {} },
+    runtime: {
+      sendMessage: () => Promise.resolve(null),
+      onMessage: { addListener: () => {} },
+    },
+  };
+}
+
+const input = document.getElementById("searchInput");
+const form = document.getElementById("searchForm");
+const panels = document.querySelectorAll(".sc-content");
+const tabs = document.querySelectorAll(".sc-tab");
+
+function applyTab(target) {
+  tabs.forEach((t) => {
+    const active = t.dataset.tab === target;
+    t.classList.toggle("is-active", active);
+    t.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  panels.forEach((p) => {
+    p.hidden = p.id !== "tab-" + target;
+  });
+  document.body.classList.toggle("is-advanced", target === "advanced");
+  document.body.classList.toggle("is-settings", target === "settings");
+}
+
+tabs.forEach((tab) => {
+  tab.addEventListener("click", () => applyTab(tab.dataset.tab));
+});
+
+const content = document.body;
+
+function runSearch(q) {
+  const query = (q || "").trim();
+  if (!query) return;
+  const url = "https://www.google.com/search?client=firefox-b-d&q=" + encodeURIComponent(query);
+  browser.tabs.update({ url });
+}
+
+form.addEventListener("submit", (e) => {
+  e.preventDefault();
+  runSearch(input.value);
+});
+
+content.addEventListener("click", (e) => {
+  const a = e.target.closest("a");
+  if (!a) return;
+  e.preventDefault();
+  if (a.dataset.q) {
+    input.value = a.dataset.q;
+    runSearch(a.dataset.q);
+    return;
+  }
+  const href = a.getAttribute("href");
+  if (href && href !== "#") browser.tabs.update({ url: href });
+});
+
+async function syncFromActiveTab() {
+  try {
+    const res = await browser.runtime.sendMessage({ type: "get-current-query" });
+    if (res && res.query) input.value = res.query;
+  } catch (e) { /* background not ready */ }
+}
+
+browser.runtime.onMessage.addListener((msg) => {
+  if (msg && msg.type === "search-context" && typeof msg.query === "string") {
+    input.value = msg.query;
+  }
+});
+
+// Move any .sc-meta from inside the link to be a sibling of it inside the li,
+// so the row's hover state can hide the meta and reveal the menu in its place.
+document.querySelectorAll(".sc-list a > .sc-meta").forEach((meta) => {
+  const a = meta.parentElement;
+  a.after(meta);
+});
+
+// Inject a "more actions" button at the right end of every list-row, hidden
+// until the row is hovered/focused. Has its own circular hover state on top
+// of the row's hover background.
+document.querySelectorAll(".sc-list li").forEach((li) => {
+  if (li.querySelector(".sc-row-menu")) return;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "sc-row-menu";
+  btn.tabIndex = -1;
+  btn.setAttribute("aria-label", "More actions");
+  btn.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="3" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="13" r="1.4" fill="currentColor"/></svg>';
+  li.appendChild(btn);
+});
+
+// Prevent the row's link-level click handler from firing when the menu is clicked.
+document.addEventListener("click", (e) => {
+  if (e.target.closest(".sc-row-menu")) e.stopPropagation();
+}, true);
+
+document.querySelectorAll(".sc-more").forEach((more) => { more.inert = true; });
+
+document.querySelectorAll(".sc-show-more").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const more = btn.previousElementSibling;
+    if (!more || !more.classList.contains("sc-more")) return;
+    const open = more.classList.toggle("is-open");
+    more.inert = !open;
+    btn.textContent = open ? "Show less" : "Show more";
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+});
+
+const stickyHead = document.querySelector(".sc-stickyhead");
+function updateStickyOffset() {
+  document.documentElement.style.setProperty("--sticky-header", stickyHead.offsetHeight + "px");
+}
+updateStickyOffset();
+new ResizeObserver(updateStickyOffset).observe(stickyHead);
+
+function updateSuggestionRadius() {
+  const sample = document.querySelector("#suggestionsList a");
+  if (!sample) return;
+  const ul = sample.parentNode.parentNode;
+  const li = document.createElement("li");
+  const probe = sample.cloneNode(false);
+  probe.textContent = "x";
+  probe.style.whiteSpace = "nowrap";
+  probe.style.visibility = "hidden";
+  li.style.visibility = "hidden";
+  li.appendChild(probe);
+  ul.appendChild(li);
+  const h = probe.getBoundingClientRect().height;
+  ul.removeChild(li);
+  if (h > 0) {
+    document.documentElement.style.setProperty("--suggestion-radius", (h / 2) + "px");
+  }
+}
+updateSuggestionRadius();
+new ResizeObserver(updateSuggestionRadius).observe(document.body);
+
+// Roving tabindex per section: Tab moves between sections (one stop each),
+// Up/Down cycles within the current section, skipping hidden (inert) items.
+function sectionItems(section) {
+  const items = [];
+  section.querySelectorAll("a, .sc-show-more").forEach((el) => {
+    let p = el.parentElement;
+    while (p && p !== section) {
+      if (p.inert) return;
+      p = p.parentElement;
+    }
+    items.push(el);
+  });
+  return items;
+}
+
+function setupRovingTabindex() {
+  document.querySelectorAll(".sc-content a, .sc-show-more").forEach((el) => {
+    el.tabIndex = -1;
+  });
+  document.querySelectorAll(".sc-content:not([hidden]) .sc-section").forEach((section) => {
+    const items = sectionItems(section);
+    const first = items.find((el) => el.tagName === "A");
+    if (first && first.tabIndex !== 0) first.tabIndex = 0;
+  });
+}
+
+// Advanced search form: build a Google query from the structured fields and
+// navigate the active tab. Mirrors what google.com/advanced_search does.
+const advancedForm = document.getElementById("advancedForm");
+if (advancedForm) {
+  advancedForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const fd = new FormData(advancedForm);
+    const all = (fd.get("all") || "").trim();
+    const exact = (fd.get("exact") || "").trim();
+    const any = (fd.get("any") || "").trim();
+    const none = (fd.get("none") || "").trim();
+    const site = (fd.get("site") || "").trim();
+    const where = fd.get("where") || "";
+    const filetype = fd.get("filetype") || "";
+    const time = fd.get("time") || "";
+    const region = fd.get("region") || "";
+    const lang = fd.get("lang") || "";
+    const safe = fd.get("safe");
+
+    const parts = [];
+    let mainTerms = all;
+    if (where && mainTerms) {
+      mainTerms = mainTerms.split(/\s+/).filter(Boolean).map((w) => `${where}:${w}`).join(" ");
+    }
+    if (mainTerms) parts.push(mainTerms);
+    if (exact) parts.push(`"${exact}"`);
+    if (any) {
+      const words = any.split(/\s+/).filter(Boolean);
+      if (words.length) parts.push("(" + words.join(" OR ") + ")");
+    }
+    if (none) {
+      none.split(/\s+/).filter(Boolean).forEach((w) => parts.push(`-${w}`));
+    }
+    if (site) parts.push(`site:${site}`);
+    if (filetype) parts.push(`filetype:${filetype}`);
+
+    const q = parts.join(" ").trim();
+    if (!q) return;
+
+    const params = new URLSearchParams({ client: "firefox-b-d", q });
+    if (time) params.set("tbs", `qdr:${time}`);
+    if (region) params.set("cr", region);
+    if (lang) params.set("lr", lang);
+    if (safe) params.set("safe", "active");
+
+    browser.tabs.update({ url: "https://www.google.com/search?" + params.toString() });
+  });
+}
+
+setupRovingTabindex();
+
+tabs.forEach((tab) => tab.addEventListener("click", () => setTimeout(setupRovingTabindex, 0)));
+document.querySelectorAll(".sc-show-more").forEach((btn) => {
+  btn.addEventListener("click", () => setTimeout(setupRovingTabindex, 0));
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const focused = document.activeElement;
+  if (!focused) return;
+  const section = focused.closest(".sc-section");
+  if (!section || !section.closest(".sc-content")) return;
+  const items = sectionItems(section);
+  const i = items.indexOf(focused);
+  if (i === -1) return;
+  e.preventDefault();
+  const len = items.length;
+  const next = e.key === "ArrowDown" ? (i + 1) % len : (i - 1 + len) % len;
+  items.forEach((el) => { el.tabIndex = -1; });
+  items[next].tabIndex = 0;
+  items[next].focus();
+});
+
+syncFromActiveTab();
+input.focus();
+  </script>
 </body>
 </html>

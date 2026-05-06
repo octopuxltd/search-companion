@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Firefox extension (web-ext run)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "web-ext", "run", "--source-dir=."],
+      "port": 0
+    },
+    {
+      "name": "Landing page static server",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8080"],
+      "port": 8080
+    },
+    {
+      "name": "Live-reload server",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "live-server", "sidebar", "--entry-file=sidebar.html", "--port=8081", "--no-browser", "--quiet"],
+      "port": 8081
+    }
+  ]
+}
