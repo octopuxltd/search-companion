@@ -1,13 +1,13 @@
 {
   "manifest_version": 2,
-  "name": "Search companion",
-  "version": "1.0.2",
+  "name": "Search sidebar",
+  "version": "1.0.3",
   "description": "Companion sidebar that opens on Google search result pages.",
   "browser_specific_settings": {
     "gecko": {
       "id": "search-companion@paulannett.co.uk",
       "update_url": "https://octopuxltd.github.io/search-companion/update.json",
-      "strict_min_version": "115.0",
+      "strict_min_version": "139.0",
       "data_collection_permissions": {
         "required": ["none"]
       }
@@ -19,19 +19,20 @@
   },
   "permissions": [
     "tabs",
+    "tabGroups",
     "activeTab",
     "*://www.google.com/*",
     "*://www.google.co.uk/*"
   ],
   "browser_action": {
-    "default_title": "Search companion",
+    "default_title": "Search sidebar",
     "default_icon": {
       "48": "images/search-icon.svg",
       "96": "images/search-icon.svg"
     }
   },
   "sidebar_action": {
-    "default_title": "Search companion",
+    "default_title": "Search sidebar",
     "default_panel": "sidebar/sidebar.html",
     "default_icon": "images/search-icon.svg",
     "open_at_install": true

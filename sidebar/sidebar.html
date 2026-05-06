@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Search companion</title>
+  <title>Search sidebar</title>
   <style>
 :root {
   color-scheme: light dark;
@@ -40,6 +40,9 @@
 
 * { box-sizing: border-box; }
 
+/* Use the regular arrow pointer everywhere, even on links and buttons. */
+a, button, label, summary { cursor: default; }
+
 html, body {
   margin: 0;
   padding: 0;
@@ -62,9 +65,27 @@ html, body {
   position: relative;
 }
 
+/* Continuous 1px line under the entire tab strip, including the empty gap
+   between the text tabs and the right-aligned settings tab. Sits behind the
+   tabs so each tab's own bottom border (active accent / hover dark) paints
+   over it. */
+.sc-tabs::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--border);
+  z-index: 0;
+}
+
 .sc-tab {
-  flex: 1;
-  padding: 5.75px 12px;
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  padding: 5.75px 14px;
+  white-space: nowrap;
   font: inherit;
   font-size: 12px;
   font-weight: 500;
@@ -72,14 +93,14 @@ html, body {
   background: transparent;
   border: none;
   border-bottom: 1px solid var(--border);
-  cursor: pointer;
 }
 
 .sc-tab:hover { color: var(--fg); border-bottom-color: var(--fg); }
 
 .sc-tab-icon {
-  /* Icon-only tab: auto width so it doesn't share the equal flex of text tabs. */
+  /* Icon-only tab — pushed to the far right of the strip. */
   flex: 0 0 auto;
+  margin-left: auto;
   padding: 5.75px 18px;
   display: inline-flex;
   align-items: center;
@@ -101,7 +122,6 @@ html, body {
   display: flex;
   gap: 6px;
   padding: 11.5px 14px;
-  border-bottom: 1px solid var(--border);
 }
 
 .sc-search-engine-switcher {
@@ -117,7 +137,6 @@ html, body {
   border: 1px solid rgba(0, 0, 0, 0.04);
   border-radius: 999px;
   color: var(--muted);
-  cursor: pointer;
 }
 
 .sc-search-engine-switcher:focus { outline: none; }
@@ -134,6 +153,67 @@ html, body {
   background: #fff;
   border-radius: 50%;
 }
+
+.sc-search-engine-switcher-circle svg { width: 12px; height: 12px; }
+
+.sc-engine-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.sc-engine-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  min-width: 180px;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.sc-engine-item {
+  appearance: none;
+  -webkit-appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.sc-engine-item:hover,
+.sc-engine-item:focus {
+  background: var(--btn-bg);
+  outline: none;
+}
+
+.sc-engine-item.is-current {
+  color: var(--accent);
+}
+
+.sc-engine-mini {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 50%;
+}
+
+.sc-engine-mini svg { width: 14px; height: 14px; }
 
 .sc-input-wrap {
   flex: 1;
@@ -187,7 +267,6 @@ html, body {
   border: none;
   border-radius: 50%;
   color: var(--muted);
-  cursor: pointer;
 }
 
 .sc-submit:hover { color: var(--accent); background: rgba(0,0,0,0.05); }
@@ -203,24 +282,48 @@ html, body {
 }
 
 .sc-section {
-  padding: 12px 6px;
-  border-bottom: 1px solid var(--border);
+  padding: 12px 6px 16px;
 }
 
-.sc-section:last-child { border-bottom: none; }
-
+/* Heading band — sticky under the global header. The inset top line gives every
+   heading a 1px divider above it (including the first one in a panel) so the
+   visual rhythm is consistent. */
 .sc-section h2 {
   position: sticky;
   top: var(--sticky-header, 86px);
   z-index: 5;
-  margin: -12px -6px 8px;
-  padding: 8px 14px;
+  margin: -12px -6px 12px;
+  padding: 6px 14px;
   background: var(--heading-bg);
+  box-shadow: inset 0 1px 0 var(--border);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0;
   color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
+
+.sc-h2-action {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: -2px -8px -2px 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--accent);
+}
+.sc-h2-action:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.sc-h2-action:focus { outline: none; }
+.sc-h2-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .sc-list {
   list-style: none;
@@ -233,6 +336,24 @@ html, body {
   display: flex;
   align-items: center;
   border-radius: var(--suggestion-radius, 17px);
+  overflow: hidden;
+}
+
+/* Fade the row's content into the hover bg before it reaches the absolutely-
+   positioned Dig deeper / 3-dot menu buttons. Anchored to the row (not the
+   link) so the gradient ends at a consistent distance from the row's right
+   edge regardless of how wide the link is. */
+.sc-list li:hover::after,
+.sc-list li:focus-within::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 190px;
+  background: linear-gradient(to right, transparent, var(--btn-bg) 60px);
+  pointer-events: none;
+  z-index: 1;
 }
 
 /* Rows without a meta span need extra right padding inside the link
@@ -253,6 +374,7 @@ html, body {
 }
 
 .sc-list a {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -326,7 +448,6 @@ html, body {
   background: transparent;
   border: none;
   border-radius: 6px;
-  cursor: pointer;
 }
 
 .sc-show-more:hover { background: var(--hover); }
@@ -335,6 +456,7 @@ html, body {
 
 .sc-row-menu {
   position: absolute;
+  z-index: 2;
   right: 4px;
   top: 50%;
   transform: translateY(-50%);
@@ -350,8 +472,47 @@ html, body {
   border: none;
   border-radius: 50%;
   color: var(--muted);
-  cursor: pointer;
   visibility: hidden;
+}
+
+/* Dig-deeper pill — sits to the left of the 3-dot menu, hidden until hover. */
+.sc-row-dig {
+  position: absolute;
+  z-index: 2;
+  right: 34px;
+  top: 50%;
+  transform: translateY(-50%);
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 12px 2px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--accent);
+  background: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  visibility: hidden;
+}
+@media (prefers-color-scheme: dark) {
+  .sc-row-dig { background: var(--bg); }
+}
+.sc-row-dig:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.sc-row-dig:focus { outline: none; }
+.sc-row-dig:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.sc-list li:hover .sc-row-dig,
+.sc-list li:focus-within .sc-row-dig,
+.sc-row-dig:focus-visible {
+  visibility: visible;
 }
 
 .sc-list li:hover .sc-row-menu,
@@ -374,11 +535,261 @@ html, body {
   outline-offset: 1px;
 }
 
+/* Dropdown shown when a row's 3-dot menu is clicked. */
+.sc-row-menu-popup {
+  position: fixed;
+  z-index: 30;
+  min-width: 220px;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.sc-row-menu-popup button {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+}
+
+.sc-row-menu-popup button:hover,
+.sc-row-menu-popup button:focus {
+  background: var(--btn-bg);
+  outline: none;
+}
+
 .sc-help {
   margin: 0 0 12px;
   font-size: 12px;
   color: var(--muted);
 }
+
+/* Dig Deeper page */
+.sc-dig-page-head {
+  padding: 4px 6px 14px;
+}
+
+/* The back button's icon and text line up with the magnifying-glass icons
+   and titles in the search suggestion lists below it. */
+.sc-back {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px 1px;
+  padding: 7px 12px 7px 7px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+}
+.sc-back:hover { background: var(--btn-bg); color: var(--fg); }
+
+.sc-dig-query {
+  margin: 0;
+  padding-left: 8px;
+}
+.sc-dig-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.sc-dig-query-text {
+  display: block;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--fg);
+  word-break: break-word;
+}
+
+.sc-dig-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 8px;
+}
+
+/* Two-column section row used for Multi-search + AI summary side by side.
+   The horizontal gutter splits the top divider too — each column's h2 keeps
+   its own inset top line, so the divider is broken across the gap. */
+.sc-section-row {
+  display: flex;
+  gap: 14px;
+}
+.sc-section-row .sc-section--col {
+  flex: 1;
+  min-width: 0;
+}
+
+.sc-multi-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 10px;
+}
+
+/* Aligned with the search suggestion list below — icon at the same x-position
+   as the magnifying-glass icons, name at the same x as the suggestion text. */
+.sc-multi-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 4px 4px 13px;
+  border-radius: var(--suggestion-radius, 17px);
+  font-size: 13px;
+  color: var(--fg);
+}
+.sc-multi-item:hover { background: var(--btn-bg); }
+
+.sc-multi-item input[type="checkbox"] {
+  margin: 0 6px 0 0;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.sc-multi-item .sc-engine-mini {
+  width: 14px;
+  height: 14px;
+  background: transparent;
+  border: none;
+}
+.sc-multi-item .sc-engine-mini svg {
+  width: 14px;
+  height: 14px;
+}
+
+.sc-multi-name { flex: 1; min-width: 0; }
+
+#multiBtn {
+  display: block;
+  margin: 18px auto 0;
+}
+
+.sc-dig-card-text {
+  margin: 4px 0 8px;
+  padding-left: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.sc-dig-summary-body {
+  padding-left: 8px;
+}
+
+.sc-dig-summary-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg);
+}
+
+/* Skeleton lines shown while the summary is "loading". */
+.sc-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sc-skel-line {
+  display: block;
+  height: 12px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(0,0,0,0.06), rgba(0,0,0,0.12), rgba(0,0,0,0.06));
+  background-size: 200% 100%;
+  animation: sc-skel-shimmer 1.4s linear infinite;
+}
+@media (prefers-color-scheme: dark) {
+  .sc-skel-line {
+    background: linear-gradient(90deg, rgba(255,255,255,0.05), rgba(255,255,255,0.12), rgba(255,255,255,0.05));
+    background-size: 200% 100%;
+  }
+}
+@keyframes sc-skel-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Blinking caret while the summary is being "typed" out. */
+.sc-typing-caret {
+  display: inline-block;
+  margin-left: 1px;
+  color: var(--muted);
+  animation: sc-caret-blink 0.9s steps(1) infinite;
+}
+@keyframes sc-caret-blink {
+  50% { opacity: 0; }
+}
+
+.sc-dig-link {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-block;
+  margin: 8px 0 0 13px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 0;
+}
+.sc-dig-link:hover { text-decoration: underline; }
+
+.sc-dig-image-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 4px;
+  padding: 0 13px;
+}
+.sc-dig-image-thumb {
+  aspect-ratio: 1;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 4px;
+}
+@media (prefers-color-scheme: dark) {
+  .sc-dig-image-thumb { background: rgba(255, 255, 255, 0.04); }
+}
+
+.sc-dig-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.sc-dig-time-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-left: 8px;
+}
+.sc-dig-time-buttons .sc-btn-secondary {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
 
 body.is-advanced .sc-search,
 body.is-settings .sc-search { display: none; }
@@ -417,7 +828,6 @@ body.is-settings .sc-search { display: none; }
   background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12'%3E%3Cpath d='M2 4.5l4 4 4-4' fill='none' stroke='%236b6b6b' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 8px center;
-  cursor: pointer;
 }
 
 .sc-field > input[type="text"]:focus,
@@ -432,7 +842,6 @@ body.is-settings .sc-search { display: none; }
   gap: 8px;
   font-size: 13px;
   color: var(--fg);
-  cursor: pointer;
 }
 
 .sc-advanced-actions {
@@ -451,7 +860,6 @@ body.is-settings .sc-search { display: none; }
   font-size: 13px;
   font-weight: 500;
   border-radius: 999px;
-  cursor: pointer;
 }
 
 .sc-btn-primary {
@@ -460,6 +868,14 @@ body.is-settings .sc-search { display: none; }
   border: 1px solid var(--accent);
 }
 .sc-btn-primary:hover { filter: brightness(1.05); }
+.sc-btn-primary:disabled,
+.sc-btn-primary[disabled] {
+  color: var(--muted);
+  background: var(--btn-bg);
+  border-color: rgba(0, 0, 0, 0.04);
+  filter: none;
+  pointer-events: none;
+}
 
 .sc-btn-secondary {
   color: var(--fg);
@@ -491,19 +907,15 @@ body.is-settings .sc-search { display: none; }
 
     <form class="sc-search" id="searchForm" role="search">
       <div class="sc-input-wrap">
-        <button type="button" class="sc-search-engine-switcher" id="searchEngineSwitcherBtn" aria-label="Change search engine" aria-haspopup="menu">
-        <span class="sc-search-engine-switcher-circle" aria-hidden="true">
-          <svg viewBox="0 0 18 18" width="12" height="12">
-            <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62z"/>
-            <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.8.54-1.84.86-3.05.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.32A8.99 8.99 0 0 0 9 18z"/>
-            <path fill="#FBBC05" d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.96H.96A8.99 8.99 0 0 0 0 9c0 1.45.35 2.82.96 4.04l3.01-2.32z"/>
-            <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.46 3.44 1.35l2.58-2.58A8.97 8.97 0 0 0 9 0 8.99 8.99 0 0 0 .96 4.96l3.01 2.32C4.68 5.16 6.66 3.58 9 3.58z"/>
-          </svg>
+        <span class="sc-engine-wrap">
+          <button type="button" class="sc-search-engine-switcher" id="searchEngineSwitcherBtn" aria-label="Change search engine" aria-haspopup="menu" aria-expanded="false">
+            <span class="sc-search-engine-switcher-circle" aria-hidden="true"></span>
+            <svg class="sc-search-engine-switcher-chevron" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+              <path d="M2 4.5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div class="sc-engine-panel" id="enginePanel" role="menu" aria-label="Search engines" hidden></div>
         </span>
-        <svg class="sc-search-engine-switcher-chevron" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
-          <path d="M2 4.5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
         <input
           type="search"
           id="searchInput"
@@ -522,8 +934,8 @@ body.is-settings .sc-search { display: none; }
   </header>
 
   <div class="sc-content" id="tab-current" role="tabpanel" aria-labelledby="tabbtn-current">
-    <section class="sc-section" aria-label="Suggested next searches">
-      <h2>Suggested next searches</h2>
+    <section class="sc-section" aria-label="Your next search">
+      <h2>Your next search</h2>
       <ul class="sc-list" id="suggestionsList">
         <li><a href="#" data-q="best wireless headphones under £200">best wireless headphones under £200</a></li>
         <li><a href="#" data-q="noise cancelling headphones for flights">noise cancelling headphones for flights</a></li>
@@ -588,6 +1000,82 @@ body.is-settings .sc-search { display: none; }
       </div>
       <button type="button" class="sc-show-more" aria-expanded="false">Show more</button>
     </section>
+  </div>
+
+  <div class="sc-content" id="tab-dig" role="tabpanel" hidden>
+    <div class="sc-dig-page-head">
+      <button type="button" class="sc-back" id="digBackBtn">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <path d="M10 4l-4 4 4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Back
+      </button>
+      <div class="sc-dig-query">
+        <span class="sc-dig-query-text" id="digQuery"></span>
+      </div>
+    </div>
+
+    <section class="sc-section">
+      <h2>Similar searches</h2>
+      <ul class="sc-list" id="digSimilarList"></ul>
+      <div class="sc-more" id="digSimilarMore"><ul class="sc-list" id="digSimilarMoreList"></ul></div>
+      <button type="button" class="sc-show-more" id="digSimilarShowMore" aria-expanded="false" hidden>Show more</button>
+    </section>
+
+    <div class="sc-section-row">
+      <section class="sc-section sc-section--col">
+        <h2>Multi-search</h2>
+        <div class="sc-multi-list" id="multiList"></div>
+        <button type="button" class="sc-btn-primary" id="multiBtn" data-action="multi-search">Run 6 searches</button>
+      </section>
+      <section class="sc-section sc-section--col">
+        <h2>
+          <span>AI summary</span>
+          <button type="button" class="sc-h2-action" data-action="regenerate-summary" aria-label="Regenerate summary">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M2.5 8a5.5 5.5 0 0 1 9.4-3.9l1.6 1.4"/>
+              <path d="M13.5 2.5v3h-3"/>
+              <path d="M13.5 8a5.5 5.5 0 0 1-9.4 3.9L2.5 10.5"/>
+              <path d="M2.5 13.5v-3h3"/>
+            </svg>
+          </button>
+        </h2>
+        <div class="sc-dig-summary-body" id="digSummaryBody"></div>
+      </section>
+    </div>
+
+    <section class="sc-section">
+      <h2>Image search</h2>
+      <div class="sc-dig-image-grid" aria-hidden="true">
+        <div class="sc-dig-image-thumb"></div>
+        <div class="sc-dig-image-thumb"></div>
+        <div class="sc-dig-image-thumb"></div>
+        <div class="sc-dig-image-thumb"></div>
+      </div>
+      <button type="button" class="sc-dig-link" data-action="open-images">Show more</button>
+    </section>
+
+    <section class="sc-section">
+      <h2>Filter by time</h2>
+      <p class="sc-dig-card-text">Re-run the search restricted to a recency window.</p>
+      <div class="sc-dig-time-buttons">
+        <button type="button" class="sc-btn-secondary" data-time="h">Past hour</button>
+        <button type="button" class="sc-btn-secondary" data-time="d">Past 24h</button>
+        <button type="button" class="sc-btn-secondary" data-time="w">Past week</button>
+        <button type="button" class="sc-btn-secondary" data-time="m">Past month</button>
+        <button type="button" class="sc-btn-secondary" data-time="y">Past year</button>
+      </div>
+    </section>
+
+    <section class="sc-section">
+      <h2>Comparison shortlist</h2>
+      <p class="sc-dig-card-text">Save this topic to compare side-by-side with others later.</p>
+      <div class="sc-dig-actions">
+        <button type="button" class="sc-btn-secondary" data-action="add-compare">Add to comparison</button>
+        <span class="sc-dig-badge" id="digCompareCount">0</span>
+      </div>
+    </section>
+
   </div>
 
   <div class="sc-content" id="tab-advanced" role="tabpanel" aria-labelledby="tabbtn-advanced" hidden>
@@ -723,249 +1211,11 @@ body.is-settings .sc-search { display: none; }
     </section>
   </div>
 
-  <script>
-// Stub the `browser.*` API when running outside a Firefox extension (e.g. file://
-// preview, plain browser). Lets the rest of the script run for layout/UX work.
-if (typeof browser === "undefined") {
-  window.browser = {
-    tabs: { update: () => {} },
-    runtime: {
-      sendMessage: () => Promise.resolve(null),
-      onMessage: { addListener: () => {} },
-    },
-  };
-}
+  <div class="sc-row-menu-popup" id="rowMenuPopup" role="menu" hidden>
+    <button type="button" data-row-action="remove" role="menuitem">Remove suggestion</button>
+    <button type="button" data-row-action="dig" role="menuitem">Dig deeper without searching</button>
+  </div>
 
-const input = document.getElementById("searchInput");
-const form = document.getElementById("searchForm");
-const panels = document.querySelectorAll(".sc-content");
-const tabs = document.querySelectorAll(".sc-tab");
-
-function applyTab(target) {
-  tabs.forEach((t) => {
-    const active = t.dataset.tab === target;
-    t.classList.toggle("is-active", active);
-    t.setAttribute("aria-selected", active ? "true" : "false");
-  });
-  panels.forEach((p) => {
-    p.hidden = p.id !== "tab-" + target;
-  });
-  document.body.classList.toggle("is-advanced", target === "advanced");
-  document.body.classList.toggle("is-settings", target === "settings");
-}
-
-tabs.forEach((tab) => {
-  tab.addEventListener("click", () => applyTab(tab.dataset.tab));
-});
-
-const content = document.body;
-
-function runSearch(q) {
-  const query = (q || "").trim();
-  if (!query) return;
-  const url = "https://www.google.com/search?client=firefox-b-d&q=" + encodeURIComponent(query);
-  browser.tabs.update({ url });
-}
-
-form.addEventListener("submit", (e) => {
-  e.preventDefault();
-  runSearch(input.value);
-});
-
-content.addEventListener("click", (e) => {
-  const a = e.target.closest("a");
-  if (!a) return;
-  e.preventDefault();
-  if (a.dataset.q) {
-    input.value = a.dataset.q;
-    runSearch(a.dataset.q);
-    return;
-  }
-  const href = a.getAttribute("href");
-  if (href && href !== "#") browser.tabs.update({ url: href });
-});
-
-async function syncFromActiveTab() {
-  try {
-    const res = await browser.runtime.sendMessage({ type: "get-current-query" });
-    if (res && res.query) input.value = res.query;
-  } catch (e) { /* background not ready */ }
-}
-
-browser.runtime.onMessage.addListener((msg) => {
-  if (msg && msg.type === "search-context" && typeof msg.query === "string") {
-    input.value = msg.query;
-  }
-});
-
-// Move any .sc-meta from inside the link to be a sibling of it inside the li,
-// so the row's hover state can hide the meta and reveal the menu in its place.
-document.querySelectorAll(".sc-list a > .sc-meta").forEach((meta) => {
-  const a = meta.parentElement;
-  a.after(meta);
-});
-
-// Inject a "more actions" button at the right end of every list-row, hidden
-// until the row is hovered/focused. Has its own circular hover state on top
-// of the row's hover background.
-document.querySelectorAll(".sc-list li").forEach((li) => {
-  if (li.querySelector(".sc-row-menu")) return;
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "sc-row-menu";
-  btn.tabIndex = -1;
-  btn.setAttribute("aria-label", "More actions");
-  btn.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="3" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="13" r="1.4" fill="currentColor"/></svg>';
-  li.appendChild(btn);
-});
-
-// Prevent the row's link-level click handler from firing when the menu is clicked.
-document.addEventListener("click", (e) => {
-  if (e.target.closest(".sc-row-menu")) e.stopPropagation();
-}, true);
-
-document.querySelectorAll(".sc-more").forEach((more) => { more.inert = true; });
-
-document.querySelectorAll(".sc-show-more").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const more = btn.previousElementSibling;
-    if (!more || !more.classList.contains("sc-more")) return;
-    const open = more.classList.toggle("is-open");
-    more.inert = !open;
-    btn.textContent = open ? "Show less" : "Show more";
-    btn.setAttribute("aria-expanded", open ? "true" : "false");
-  });
-});
-
-const stickyHead = document.querySelector(".sc-stickyhead");
-function updateStickyOffset() {
-  document.documentElement.style.setProperty("--sticky-header", stickyHead.offsetHeight + "px");
-}
-updateStickyOffset();
-new ResizeObserver(updateStickyOffset).observe(stickyHead);
-
-function updateSuggestionRadius() {
-  const sample = document.querySelector("#suggestionsList a");
-  if (!sample) return;
-  const ul = sample.parentNode.parentNode;
-  const li = document.createElement("li");
-  const probe = sample.cloneNode(false);
-  probe.textContent = "x";
-  probe.style.whiteSpace = "nowrap";
-  probe.style.visibility = "hidden";
-  li.style.visibility = "hidden";
-  li.appendChild(probe);
-  ul.appendChild(li);
-  const h = probe.getBoundingClientRect().height;
-  ul.removeChild(li);
-  if (h > 0) {
-    document.documentElement.style.setProperty("--suggestion-radius", (h / 2) + "px");
-  }
-}
-updateSuggestionRadius();
-new ResizeObserver(updateSuggestionRadius).observe(document.body);
-
-// Roving tabindex per section: Tab moves between sections (one stop each),
-// Up/Down cycles within the current section, skipping hidden (inert) items.
-function sectionItems(section) {
-  const items = [];
-  section.querySelectorAll("a, .sc-show-more").forEach((el) => {
-    let p = el.parentElement;
-    while (p && p !== section) {
-      if (p.inert) return;
-      p = p.parentElement;
-    }
-    items.push(el);
-  });
-  return items;
-}
-
-function setupRovingTabindex() {
-  document.querySelectorAll(".sc-content a, .sc-show-more").forEach((el) => {
-    el.tabIndex = -1;
-  });
-  document.querySelectorAll(".sc-content:not([hidden]) .sc-section").forEach((section) => {
-    const items = sectionItems(section);
-    const first = items.find((el) => el.tagName === "A");
-    if (first && first.tabIndex !== 0) first.tabIndex = 0;
-  });
-}
-
-// Advanced search form: build a Google query from the structured fields and
-// navigate the active tab. Mirrors what google.com/advanced_search does.
-const advancedForm = document.getElementById("advancedForm");
-if (advancedForm) {
-  advancedForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const fd = new FormData(advancedForm);
-    const all = (fd.get("all") || "").trim();
-    const exact = (fd.get("exact") || "").trim();
-    const any = (fd.get("any") || "").trim();
-    const none = (fd.get("none") || "").trim();
-    const site = (fd.get("site") || "").trim();
-    const where = fd.get("where") || "";
-    const filetype = fd.get("filetype") || "";
-    const time = fd.get("time") || "";
-    const region = fd.get("region") || "";
-    const lang = fd.get("lang") || "";
-    const safe = fd.get("safe");
-
-    const parts = [];
-    let mainTerms = all;
-    if (where && mainTerms) {
-      mainTerms = mainTerms.split(/\s+/).filter(Boolean).map((w) => `${where}:${w}`).join(" ");
-    }
-    if (mainTerms) parts.push(mainTerms);
-    if (exact) parts.push(`"${exact}"`);
-    if (any) {
-      const words = any.split(/\s+/).filter(Boolean);
-      if (words.length) parts.push("(" + words.join(" OR ") + ")");
-    }
-    if (none) {
-      none.split(/\s+/).filter(Boolean).forEach((w) => parts.push(`-${w}`));
-    }
-    if (site) parts.push(`site:${site}`);
-    if (filetype) parts.push(`filetype:${filetype}`);
-
-    const q = parts.join(" ").trim();
-    if (!q) return;
-
-    const params = new URLSearchParams({ client: "firefox-b-d", q });
-    if (time) params.set("tbs", `qdr:${time}`);
-    if (region) params.set("cr", region);
-    if (lang) params.set("lr", lang);
-    if (safe) params.set("safe", "active");
-
-    browser.tabs.update({ url: "https://www.google.com/search?" + params.toString() });
-  });
-}
-
-setupRovingTabindex();
-
-tabs.forEach((tab) => tab.addEventListener("click", () => setTimeout(setupRovingTabindex, 0)));
-document.querySelectorAll(".sc-show-more").forEach((btn) => {
-  btn.addEventListener("click", () => setTimeout(setupRovingTabindex, 0));
-});
-
-document.addEventListener("keydown", (e) => {
-  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-  const focused = document.activeElement;
-  if (!focused) return;
-  const section = focused.closest(".sc-section");
-  if (!section || !section.closest(".sc-content")) return;
-  const items = sectionItems(section);
-  const i = items.indexOf(focused);
-  if (i === -1) return;
-  e.preventDefault();
-  const len = items.length;
-  const next = e.key === "ArrowDown" ? (i + 1) % len : (i - 1 + len) % len;
-  items.forEach((el) => { el.tabIndex = -1; });
-  items[next].tabIndex = 0;
-  items[next].focus();
-});
-
-syncFromActiveTab();
-input.focus();
-  </script>
+  <script src="sidebar.js"></script>
 </body>
 </html>

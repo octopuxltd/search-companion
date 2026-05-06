@@ -1,4 +1,4 @@
-# Search companion
+# Search sidebar
 
 A Firefox sidebar that opens alongside Google search results.
 

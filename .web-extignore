@@ -2,8 +2,14 @@
 .gitignore
 .git
 .DS_Store
+.claude
 web-ext-artifacts
 docs/**
 *.zip
 *.xpi
+*.html
+!sidebar/**/*.html
+!background.js
+update.json
 README*
+CLAUDE.md
