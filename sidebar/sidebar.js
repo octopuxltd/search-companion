@@ -1,5 +1,20 @@
 // Stub the `browser.*` API when running outside a Firefox extension (e.g. file://
 // preview, plain browser). Lets the rest of the script run for layout/UX work.
+// Populate the settings page with the running extension's version. In the
+// extension this reads from the manifest; in the preview we fall back to a
+// hardcoded value kept in sync with manifest.json.
+(function showVersion() {
+  const el = document.getElementById("settingsVersion");
+  if (!el) return;
+  let v;
+  try {
+    if (typeof browser !== "undefined" && browser.runtime && browser.runtime.getManifest) {
+      v = browser.runtime.getManifest().version;
+    }
+  } catch (e) {}
+  el.textContent = v || "1.0.4";
+})();
+
 if (typeof browser === "undefined") {
   window.browser = {
     tabs: {

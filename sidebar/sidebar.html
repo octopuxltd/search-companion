@@ -592,6 +592,12 @@ html, body {
   color: var(--muted);
 }
 
+.sc-version {
+  margin: 24px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 /* Pages without a heading band (Advanced, Settings) — match the inner content
    padding the other sections get from their h2 band. */
 #tab-advanced .sc-section,
@@ -1244,6 +1250,7 @@ body.is-settings .sc-search { display: none; }
   <div class="sc-content" id="tab-settings" role="tabpanel" aria-labelledby="tabbtn-settings" hidden>
     <section class="sc-section sc-section-plain" aria-label="Settings">
       <p class="sc-help">Settings will go here — default search engine, suggestion sources, sync, keyboard shortcuts, and theme.</p>
+      <p class="sc-version">Search Sidebar version <span id="settingsVersion">—</span></p>
     </section>
   </div>
 
