@@ -2,3 +2,7 @@
 node_modules/
 web-ext-artifacts/
 *.zip
+
+# Claude Code / Cursor agent state
+.claude/worktrees/
+.claude/settings.local.json
