@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Split view</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #F8F8FA; }
+    body { display: flex; gap: 5px; }
+    iframe { flex: 1; height: 100%; border: 0; background: #fff; }
+    #left { border-right: 0.5px solid #C5C5C5; }
+    #right { border-left: 0.5px solid #C5C5C5; }
+  </style>
+</head>
+<body>
+  <iframe id="left" title="Left pane"></iframe>
+  <iframe id="right" title="Right pane"></iframe>
+  <script src="split-view.js"></script>
+</body>
+</html>

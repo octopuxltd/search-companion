@@ -3,7 +3,13 @@
 if (typeof browser === "undefined") {
   window.browser = {
     tabs: {
-      update: () => {},
+      // Navigate the preview window itself only for our own pages; leave
+      // external searches as a no-op so we don't accidentally leave the demo.
+      update: ({ url }) => {
+        if (url && (url.startsWith("split-view") || url.startsWith("moz-extension"))) {
+          window.location.href = url;
+        }
+      },
       create: ({ url }) => { window.open(url, "_blank"); return Promise.resolve({ id: -1 }); },
       query: () => Promise.resolve([]),
     },
@@ -11,6 +17,7 @@ if (typeof browser === "undefined") {
     runtime: {
       sendMessage: () => Promise.resolve(null),
       onMessage: { addListener: () => {} },
+      getURL: (path) => path,
     },
   };
 }
@@ -31,6 +38,101 @@ function applyTab(target) {
   });
   document.body.classList.toggle("is-advanced", target === "advanced");
   document.body.classList.toggle("is-settings", target === "settings");
+  if (target === "advanced") prefillAdvancedFromQuery(input && input.value);
+}
+
+// Parse a Google query string into the discrete fields the Advanced form has.
+// Handles: "exact phrase", word OR word, -none, site:, filetype:,
+// intitle:/inurl:/intext:/inanchor: prefixes; everything else falls into "all".
+function parseQuery(q) {
+  const result = { all: "", exact: "", any: "", none: "", site: "", filetype: "", where: "" };
+  if (!q) return result;
+  const tokens = [];
+  let i = 0;
+  while (i < q.length) {
+    const c = q[i];
+    if (c === '"') {
+      const end = q.indexOf('"', i + 1);
+      if (end === -1) { i++; continue; }
+      tokens.push({ type: "quoted", value: q.slice(i + 1, end) });
+      i = end + 1;
+    } else if (/\s/.test(c)) {
+      i++;
+    } else {
+      let end = i;
+      while (end < q.length && !/\s/.test(q[end]) && q[end] !== '"') end++;
+      tokens.push({ type: "word", value: q.slice(i, end) });
+      i = end;
+    }
+  }
+  const allWords = [];
+  const noneWords = [];
+  const exacts = [];
+  let anyWords = [];
+  let idx = 0;
+  while (idx < tokens.length) {
+    const t = tokens[idx];
+    if (t.type === "quoted") {
+      exacts.push(t.value);
+      idx++;
+      continue;
+    }
+    // Detect "x OR y OR z" sequence (with optional parens around the group).
+    if (idx + 2 < tokens.length && tokens[idx + 1].type === "word" && tokens[idx + 1].value === "OR") {
+      const group = [t.value.replace(/^\(+/, "").replace(/\)+$/, "")];
+      let j = idx + 1;
+      while (j + 1 < tokens.length && tokens[j].type === "word" && tokens[j].value === "OR") {
+        group.push(tokens[j + 1].value.replace(/^\(+/, "").replace(/\)+$/, ""));
+        j += 2;
+      }
+      anyWords = anyWords.concat(group);
+      idx = j;
+      continue;
+    }
+    let v = t.value.replace(/^\(+/, "").replace(/\)+$/, "");
+    if (v.startsWith("-")) {
+      noneWords.push(v.slice(1));
+    } else if (v.startsWith("site:")) {
+      result.site = v.slice(5);
+    } else if (v.startsWith("filetype:")) {
+      result.filetype = v.slice(9);
+    } else {
+      const m = v.match(/^(intitle|inurl|intext|inanchor):(.+)$/);
+      if (m) {
+        result.where = m[1];
+        allWords.push(m[2]);
+      } else {
+        allWords.push(v);
+      }
+    }
+    idx++;
+  }
+  result.all = allWords.join(" ");
+  result.exact = exacts.join(" ");
+  result.none = noneWords.join(" ");
+  result.any = anyWords.join(" ");
+  return result;
+}
+
+function prefillAdvancedFromQuery(q) {
+  const form = document.getElementById("advancedForm");
+  if (!form || !q) return;
+  // Only pre-fill if the user hasn't already started typing in Advanced.
+  const els = form.elements;
+  const dirty = ["all", "exact", "any", "none", "site"].some((n) => els[n] && els[n].value);
+  if (dirty) return;
+  const parsed = parseQuery(q.trim());
+  if (els.all) els.all.value = parsed.all;
+  if (els.exact) els.exact.value = parsed.exact;
+  if (els.any) els.any.value = parsed.any;
+  if (els.none) els.none.value = parsed.none;
+  if (els.site) els.site.value = parsed.site;
+  if (els.filetype && Array.from(els.filetype.options).some((o) => o.value === parsed.filetype)) {
+    els.filetype.value = parsed.filetype;
+  }
+  if (els.where && Array.from(els.where.options).some((o) => o.value === parsed.where)) {
+    els.where.value = parsed.where;
+  }
 }
 
 tabs.forEach((tab) => {
@@ -58,14 +160,26 @@ const ENGINES = [
     name: "Bing",
     placeholder: "Search with Bing",
     url: (q) => "https://www.bing.com/search?q=" + encodeURIComponent(q),
-    icon: `<svg viewBox="0 0 35 50"><path fill="#0078D4" d="M0 0v44.4L10 50l25-14.38V24.25l-22.18-7.76 4.34 10.82 6.92 3.22L10 38.64V3.5z"/></svg>`,
+    // Microsoft's current full-colour Fluent "b" mark, from Wikimedia Commons.
+    icon: `<svg viewBox="0 0 678 1024" fill="none">
+      <path fill="url(#bing-a)" d="M0 778.3c14.6 123.8 223.8 143 236.8 79.9-.3-.4-.5-678.1-.5-678.1-3.6-46-26.2-72-61.6-96.5-33-22.7-74.4-50.4-96.9-66.4C14.2-28 .1 31.4 0 33.2c0 0 .3 746.4 0 745.1z"/>
+      <path fill="url(#bing-b)" d="M236.8 832.8c-96.2 72.5-217 42.7-234.4-44-.8-4.2-2.4-10.4-2.4-10.4s.9 8.5 2 16.6c1.2 8.5 3.7 20.8 6.3 31.3 30 117.8 132.1 186 230.4 196.6C373.3 1034.8 497.4 931 599 855.8c6.3-6.2 15.4-16.2 18.1-20.1 66.2-95-13.6-197-72.5-193a59154 59154 0 0 0-307.7 190.1Z"/>
+      <path fill="url(#bing-c)" fill-rule="evenodd" d="M312.8 381c7.4 47 34.6 108.7 59.6 172.6 20.2 41.3 62 53.4 103 65.5 42.4 12.6 65.6 21 85.6 30.9 138.5 68.7 38.5 207.7 59.6 181.4 89-110.7 79.7-325.4-90-418.1-57.6-28.7-115.4-66.6-156.5-83.6-41-17-68.7 4.3-61.3 51.3z" clip-rule="evenodd"/>
+      <defs>
+        <linearGradient id="bing-a" x1="118.4" x2="118.4" y1="0" y2="884.4" gradientUnits="userSpaceOnUse"><stop stop-color="#00BBEC"/><stop offset="1" stop-color="#2756A9"/></linearGradient>
+        <radialGradient id="bing-b" cx="0" cy="0" r="1" gradientTransform="matrix(526 -225.4 375.6 876.6 88.8 915.1)" gradientUnits="userSpaceOnUse"><stop stop-color="#00BBEC"/><stop offset="1" stop-color="#2756A9"/></radialGradient>
+        <radialGradient id="bing-c" cx="0" cy="0" r="1" gradientTransform="matrix(-347 -399.3 287.3 -249.8 655 722)" gradientUnits="userSpaceOnUse"><stop stop-color="#00CACC"/><stop offset="1" stop-color="#048FCE"/></radialGradient>
+      </defs>
+    </svg>`,
   },
   {
     id: "ddg",
     name: "DuckDuckGo",
     placeholder: "Search with DuckDuckGo",
     url: (q) => "https://duckduckgo.com/?q=" + encodeURIComponent(q),
-    icon: `<svg viewBox="0 0 24 24"><path fill="#DE5833" d="M12 0C5.37 0 0 5.37 0 12s5.37 12 12 12 12-5.37 12-12S18.63 0 12 0zm0 1.92c5.566 0 10.078 4.512 10.078 10.078 0 4.783-3.333 8.788-7.803 9.82-.19-.416-.421-.938-.613-1.388-.32.099-.777.146-1.103.158-.248 0-.448-.013-.553-.158-.636.542-1.919 1.264-2.176 1.095-.489-.315-.949-2.74-.582-3.248.082-.116.233-.174.42-.191-.175.718.232 2.489.459 2.67.222.174 1.81-.769 1.74-.99-.14-.467-.14-.887-.123-1.149.064-.088.263-.223.397-.281a.857.857 0 0 0-.012.216c0 .275.033.746.103.95.094.25.194.414.637.408.449-.006 1.172-.104 1.284-.303.11-.197-.037-1.003-.13-1.26l-.052-.12c-.006-.012-.012-.024-.018-.03h.156c.234.052.434.15.493 1.225 0 .215 1.51.628 1.783.511.023-.011.036-.023.04-.035.13-.658.053-2.296-.53-2.99-.117-.14-1.313.618-2.03 1.154-.151-.163-.42-.257-.926-.175-.047.006-.093.016-.134.025l-.088.016c-.251-.816-.396-1.534-.338-2-.56-.298-.934-.642-1.004-.776-.122-.222.083-.326.188-.267.012.005.024.011.035.017.589.321 1.533.67 2.816.735.152.005.31.011.467.011 2.07-.017 3.276-.822 3.066-1.224-.099-.187-.529-.139-1.172-.069-.72.081-1.708.191-2.798.034-1.528-.222-1.679-.922-1.487-1.22.294-.449.844-.425 1.633-.39.416.018.899.038 1.445-.006 1.581-.127 2.478-.57 2.974-1.137.262-.297.38-.617.28-.81-.093-.169-.355-.233-1.101.053a9.607 9.607 0 0 1-2.346.576c.181-1.16-.36-5.363-3.328-5.998-.012-.006-.024-.012-.035-.023-.904-1.156-2.741-1.681-4.49-1.448-.012 0-.018.006-.024.012-.053.024-.053.122.006.144.21.07.392.166.607.336-.25.132-.617.353-.822.639-.011.012-.011.024-.011.035 0 .035.029.063.07.058.851-.169 1.719-.087 2.234.38.034.029.017.082-.03.093-4.444 1.207-3.564 5.072-2.38 9.813.825 3.299 1.364 5.231 1.6 6.052-3.982-1.345-6.85-5.113-6.85-9.55C1.922 6.434 6.434 1.922 12 1.922zm1.79 5.646c.328.001.66.058.987.144.029.006.04-.029.011-.046-.408-.227-1.39-.267-1.838.052-.046.029-.046.105.012.099.21-.06.482-.116.795-.116l.034-.133zm.6.526c-.595.004-1.11.182-1.318.461-.046.058-.011.105.046.064.245-.181.689-.286 1.155-.298.467-.012 1.04.105 1.488.351.082.052.146.012.064-.058-.397-.345-.864-.524-1.435-.52zm.169.93c.245-.006.47.046.66.151.012.018.024.018.035.012.041-.018.07-.064.046-.11-.122-.234-.594-.379-1.108-.292-.484.082-.84.351-.875.53-.005.04.018.063.04.04.21-.146.502-.262.892-.297a.69.69 0 0 1 .31-.034zm-1.732.012c-.526.018-.957.272-1.011.52-.012.04.029.064.058.029.21-.181.589-.31 1.014-.345.308-.029.566 0 .735.046.029.012.046-.018.034-.04-.121-.117-.45-.222-.83-.21z"/></svg>`,
+    // Full-colour DuckDuckGo mark (orange disc with duck silhouette in white,
+    // blue eyes, yellow beak, green bow-tie) sourced from vectorlogo.zone.
+    icon: `<svg viewBox="0 0 32 32"><g transform="matrix(.266667 0 0 .266667 -17.954934 -5.057333)"><circle cx="127.332" cy="78.966" r="51.15" fill="#de5833"/><defs><path id="ddg-A" d="M178.684 78.824c0 28.316-23.035 51.354-51.354 51.354-28.313 0-51.348-23.04-51.348-51.354s23.036-51.35 51.348-51.35c28.318 0 51.354 23.036 51.354 51.35z"/></defs><clipPath id="ddg-B"><use xlink:href="#ddg-A"/></clipPath><g clip-path="url(#ddg-B)"><path d="M148.293 155.158c-1.8-8.285-12.262-27.04-16.23-34.97s-7.938-19.1-6.13-26.322c.328-1.312-3.436-11.308-2.354-12.015 8.416-5.5 10.632.6 14.002-1.862 1.734-1.273 4.1 1.047 4.7-1.06 2.158-7.567-3.006-20.76-8.77-26.526-1.885-1.88-4.77-3.06-8.03-3.687-1.254-1.713-3.275-3.36-6.138-4.88-3.188-1.697-10.12-3.938-13.717-4.535-2.492-.4-3.055.287-4.12.46.992.088 5.7 2.414 6.615 2.55-.916.62-3.607-.028-5.324.742-.865.392-1.512 1.877-1.506 2.58 4.9-.496 12.574-.016 17.1 2-3.602.4-9.08.867-11.436 2.105-6.848 3.608-9.873 12.035-8.07 22.133 1.804 10.075 9.738 46.85 12.262 59.13 2.525 12.264-5.408 20.2-10.455 22.354l5.408.363-1.8 3.967c6.484.72 13.695-1.44 13.695-1.44-1.438 3.965-11.176 5.412-11.176 5.412s4.7 1.438 12.258-1.447l12.263-4.688 3.604 9.373 6.854-6.847 2.885 7.2c.014-.001 5.424-1.808 3.62-10.103z" fill="#d5d7d8"/><path d="M150.47 153.477c-1.795-8.3-12.256-27.043-16.228-34.98s-7.935-19.112-6.13-26.32c.335-1.3.34-6.668 1.43-7.38 8.4-5.494 7.812-.184 11.187-2.645 1.74-1.27 3.133-2.806 3.738-4.912 2.164-7.572-3.006-20.76-8.773-26.53-1.88-1.88-4.768-3.062-8.023-3.686-1.252-1.718-3.27-3.36-6.13-4.882-5.4-2.862-12.074-4.006-18.266-2.883 1 .1 3.256 2.138 4.168 2.273-1.38.936-5.053.815-5.03 2.896 4.916-.492 10.303.285 14.834 2.297-3.602.4-6.955 1.3-9.3 2.543-6.854 3.603-8.656 10.812-6.854 20.914 1.807 10.097 9.742 46.873 12.256 59.126 2.527 12.26-5.402 20.188-10.45 22.354l5.408.36-1.8 3.973c6.484.72 13.695-1.44 13.695-1.44-1.438 3.974-11.176 5.406-11.176 5.406s4.686 1.44 12.258-1.445l12.27-4.688 3.604 9.373 6.852-6.85 2.9 7.215c-.016.007 5.388-1.797 3.58-10.088z" fill="#fff"/><path d="M109.02 70.69c0-2.093 1.693-3.787 3.79-3.787 2.1 0 3.785 1.694 3.785 3.787s-1.695 3.786-3.785 3.786c-2.096.001-3.79-1.692-3.79-3.786z" fill="#2d4f8e"/><path d="M113.507 69.43a.98.98 0 0 1 .98-.983c.543 0 .984.438.984.983s-.44.984-.984.984c-.538.001-.98-.44-.98-.984z" fill="#fff"/><path d="M134.867 68.445c0-1.793 1.46-3.25 3.252-3.25 1.8 0 3.256 1.457 3.256 3.25 0 1.8-1.455 3.258-3.256 3.258a3.26 3.26 0 0 1-3.252-3.258z" fill="#2d4f8e"/><path d="M138.725 67.363c0-.463.38-.843.838-.843a.84.84 0 0 1 .846.843c0 .47-.367.842-.846.842a.84.84 0 0 1-.838-.842z" fill="#fff"/><linearGradient id="ddg-C" gradientUnits="userSpaceOnUse" x1="105.318" y1="60.979" x2="113.887" y2="60.979"><stop offset=".006" stop-color="#6176b9"/><stop offset=".691" stop-color="#394a9f"/></linearGradient><path d="M113.886 59.718s-2.854-1.3-5.63.453-2.668 3.523-2.668 3.523-1.473-3.283 2.453-4.892 5.844.916 5.844.916z" fill="url(#ddg-C)"/><linearGradient id="ddg-D" gradientUnits="userSpaceOnUse" x1="132.273" y1="58.371" x2="140.078" y2="58.371"><stop offset=".006" stop-color="#6176b9"/><stop offset=".691" stop-color="#394a9f"/></linearGradient><path d="M140.078 59.458s-2.05-1.172-3.643-1.152c-3.27.043-4.162 1.488-4.162 1.488s.55-3.445 4.732-2.754c2.268.377 3.073 2.418 3.073 2.418z" fill="url(#ddg-D)"/></g><path d="M124.4 85.295c.38-2.3 6.3-6.625 10.5-6.887 4.2-.265 5.5-.205 9-1.043s12.535-3.088 15.033-4.242c2.504-1.156 13.104.572 5.63 4.738-3.232 1.8-11.943 5.13-18.172 6.987-6.22 1.86-10-1.776-12.06 1.28-1.646 2.432-.334 5.762 7.1 6.453 10.037.93 19.66-4.52 20.72-1.625s-8.625 6.508-14.525 6.623c-5.893.1-17.77-3.896-19.555-5.137s-4.165-4.13-3.67-7.148z" fill="#fdd20a"/><path d="M128.943 115.592s-14.102-7.52-14.332-4.47c-.238 3.056 0 15.5 1.643 16.45s13.396-6.108 13.396-6.108zm5.403-.474s9.635-7.285 11.754-6.815c2.1.48 2.582 15.5.7 16.23-1.88.7-12.908-3.813-12.908-3.813z" fill="#65bc46"/><path d="M125.53 116.4c0 4.932-.7 7.05 1.4 7.52s6.104 0 7.518-.938.232-7.28-.232-8.465c-.477-1.174-8.696-.232-8.696 1.884z" fill="#43a244"/><path d="M126.426 115.292c0 4.933-.707 7.05 1.4 7.52 2.106.48 6.104 0 7.52-.938 1.4-.94.23-7.28-.236-8.466-.473-1.173-8.692-.227-8.692 1.885z" fill="#65bc46"/></g></svg>`,
   },
   {
     id: "amazon",
@@ -125,6 +239,7 @@ setEngine("google");
 // and keep the primary button's label in sync with how many are selected.
 const multiList = document.getElementById("multiList");
 const multiBtn = document.getElementById("multiBtn");
+const multiSplitBtn = document.getElementById("multiSplitBtn");
 const multiSelected = new Set(ENGINES.map((e) => e.id));
 
 multiList.innerHTML = ENGINES.map((e) => `
@@ -137,8 +252,14 @@ multiList.innerHTML = ENGINES.map((e) => `
 
 function updateMultiBtn() {
   const n = multiSelected.size;
-  multiBtn.textContent = `Run ${n} ${n === 1 ? "search" : "searches"}`;
+  multiBtn.textContent = `Open ${n} as tab group`;
   multiBtn.disabled = n === 0;
+  if (multiSplitBtn) {
+    // Split view fits at most two tabs; cap the displayed count, and only
+    // enable the button when 1 or 2 engines are selected.
+    multiSplitBtn.textContent = `Open ${Math.min(n, 2)} in split view`;
+    multiSplitBtn.disabled = n === 0 || n > 2;
+  }
 }
 updateMultiBtn();
 
@@ -377,6 +498,17 @@ digPanel.addEventListener("click", async (e) => {
           }
         } catch (err) { /* tab groups unsupported on this Firefox */ }
       }
+    } else if (action.dataset.action === "multi-search-split") {
+      // No WebExtension split-view API yet — navigate to our own simulated
+      // split-view page that renders two iframes side by side.
+      const picked = ENGINES.filter((e) => multiSelected.has(e.id)).slice(0, 2);
+      if (!picked.length) return;
+      const base = (browser.runtime && browser.runtime.getURL)
+        ? browser.runtime.getURL("sidebar/split-view.html")
+        : "split-view.html";
+      const p = new URLSearchParams({ q: digCurrentQuery, left: picked[0].id });
+      if (picked[1]) p.set("right", picked[1].id);
+      navigate(base + "?" + p.toString());
     } else if (action.dataset.action === "regenerate-summary") {
       loadSummary(digCurrentQuery);
     } else if (action.dataset.action === "add-compare") {
@@ -435,6 +567,21 @@ function hideRowMenu() {
 }
 
 document.addEventListener("click", (e) => {
+  const simulate = e.target.closest("[data-action='simulate-dnf']");
+  if (simulate) {
+    e.preventDefault();
+    const base = (browser.runtime && browser.runtime.getURL)
+      ? browser.runtime.getURL("sidebar/split-view.html")
+      : "split-view.html";
+    const p = new URLSearchParams({
+      q: "taarget",
+      left: "firefox-dnf",
+      right: "google-didyoumean",
+      domain: "taarget.com",
+    });
+    navigate(base + "?" + p.toString());
+    return;
+  }
   const dig = e.target.closest(".sc-row-dig");
   if (dig) {
     e.stopPropagation();

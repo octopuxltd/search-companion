@@ -281,6 +281,24 @@ html, body {
   padding: 0 0 4px;
 }
 
+.sc-simulate-row {
+  padding: 14px 14px 8px;
+  text-align: center;
+}
+.sc-simulate-link {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  font-size: 11px;
+  color: var(--muted);
+  background: none;
+  border: none;
+  padding: 0;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.sc-simulate-link:hover { color: var(--accent); }
+
 .sc-section {
   padding: 12px 6px 16px;
 }
@@ -574,6 +592,13 @@ html, body {
   color: var(--muted);
 }
 
+/* Pages without a heading band (Advanced, Settings) — match the inner content
+   padding the other sections get from their h2 band. */
+#tab-advanced .sc-section,
+#tab-settings .sc-section {
+  padding: 20px 14px 20px;
+}
+
 /* Dig Deeper page */
 .sc-dig-page-head {
   padding: 4px 6px 14px;
@@ -676,9 +701,24 @@ html, body {
 
 .sc-multi-name { flex: 1; min-width: 0; }
 
-#multiBtn {
-  display: block;
-  margin: 18px auto 0;
+.sc-multi-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.sc-multi-split {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.sc-multi-hint {
+  font-size: 11px;
+  color: var(--muted);
 }
 
 .sc-dig-card-text {
@@ -883,6 +923,17 @@ body.is-settings .sc-search { display: none; }
   border: 1px solid rgba(0, 0, 0, 0.04);
 }
 .sc-btn-secondary:hover { background: var(--btn-bg-hover); }
+.sc-btn-secondary:disabled,
+.sc-btn-secondary[disabled] {
+  color: rgba(0, 0, 0, 0.28);
+  background: var(--btn-bg);
+  border-color: rgba(0, 0, 0, 0.04);
+  pointer-events: none;
+}
+@media (prefers-color-scheme: dark) {
+  .sc-btn-secondary:disabled,
+  .sc-btn-secondary[disabled] { color: rgba(255, 255, 255, 0.28); }
+}
 
 .sc-btn-primary:focus-visible,
 .sc-btn-secondary:focus-visible {
@@ -934,8 +985,8 @@ body.is-settings .sc-search { display: none; }
   </header>
 
   <div class="sc-content" id="tab-current" role="tabpanel" aria-labelledby="tabbtn-current">
-    <section class="sc-section" aria-label="Your next search">
-      <h2>Your next search</h2>
+    <section class="sc-section" aria-label="Other searches to try">
+      <h2>Other searches to try</h2>
       <ul class="sc-list" id="suggestionsList">
         <li><a href="#" data-q="best wireless headphones under £200">best wireless headphones under £200</a></li>
         <li><a href="#" data-q="noise cancelling headphones for flights">noise cancelling headphones for flights</a></li>
@@ -1000,6 +1051,9 @@ body.is-settings .sc-search { display: none; }
       </div>
       <button type="button" class="sc-show-more" aria-expanded="false">Show more</button>
     </section>
+    <div class="sc-simulate-row">
+      <button type="button" class="sc-simulate-link" data-action="simulate-dnf">Simulate domain not found</button>
+    </div>
   </div>
 
   <div class="sc-content" id="tab-dig" role="tabpanel" hidden>
@@ -1026,7 +1080,13 @@ body.is-settings .sc-search { display: none; }
       <section class="sc-section sc-section--col">
         <h2>Multi-search</h2>
         <div class="sc-multi-list" id="multiList"></div>
-        <button type="button" class="sc-btn-primary" id="multiBtn" data-action="multi-search">Run 6 searches</button>
+        <div class="sc-multi-actions">
+          <button type="button" class="sc-btn-primary" id="multiBtn" data-action="multi-search">Open 6 as tab group</button>
+          <div class="sc-multi-split">
+            <button type="button" class="sc-btn-secondary" id="multiSplitBtn" data-action="multi-search-split" disabled>Open 6 in split view</button>
+            <span class="sc-multi-hint">Select up to 2</span>
+          </div>
+        </div>
       </section>
       <section class="sc-section sc-section--col">
         <h2>
