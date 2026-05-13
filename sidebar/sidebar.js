@@ -39,7 +39,7 @@
 const ALWAYS_SHOW_UPDATE_BADGE = false;
 const UPDATE_JSON_URL = "https://octopuxltd.github.io/search-companion/update.json";
 
-(async function setupUpdateBadge() {
+async function checkUpdateBadge() {
   const badge = document.getElementById("updateBadge");
   if (!badge) return;
   if (ALWAYS_SHOW_UPDATE_BADGE) { badge.hidden = false; return; }
@@ -64,11 +64,21 @@ const UPDATE_JSON_URL = "https://octopuxltd.github.io/search-companion/update.js
       .filter(Boolean)
       .sort(compareSemver)
       .pop();
-    badge.hidden = !(latest && compareSemver(latest, running) > 0);
+    // Only mutate `hidden` if the truthy/falsy state actually changes — so a
+    // currently-visible badge doesn't briefly flicker while a poll request is
+    // in flight.
+    const shouldShow = !!(latest && compareSemver(latest, running) > 0);
+    if (badge.hidden === shouldShow) badge.hidden = !shouldShow;
   } catch (e) {
-    badge.hidden = true;
+    // Network blip — leave the badge in whatever state it was, try again next tick.
   }
-})();
+}
+
+// Initial check on sidebar load, then poll every 60 seconds while the
+// sidebar is open. setInterval is paused implicitly when the sidebar is
+// closed (the document is destroyed), so there's no work to clean up.
+checkUpdateBadge();
+setInterval(checkUpdateBadge, 60 * 1000);
 
 function compareSemver(a, b) {
   const pa = String(a).split(".").map((n) => parseInt(n, 10) || 0);
@@ -94,7 +104,7 @@ function compareSemver(a, b) {
       v = browser.runtime.getManifest().version;
     }
   } catch (e) {}
-  el.textContent = v || "1.0.8";
+  el.textContent = v || "1.0.9";
 })();
 
 if (typeof browser === "undefined") {
@@ -355,6 +365,10 @@ function setEngine(id) {
   enginePanel.querySelectorAll(".sc-engine-item").forEach((b) => {
     b.classList.toggle("is-current", b.dataset.engine === id);
   });
+  // Keep the Advanced page's "Search engine" dropdown in lock-step so it
+  // always reflects the same engine the main page uses.
+  const advancedSelect = document.getElementById("advancedEngineSelect");
+  if (advancedSelect && advancedSelect.value !== id) advancedSelect.value = id;
 }
 
 function setPanelOpen(open) {
@@ -558,7 +572,7 @@ function relativeTime(ts) {
   const diff = Math.max(0, now - ts);
   const m = 60 * 1000, h = 60 * m, d = 24 * h;
   if (diff < 2 * m) return "Just now";
-  if (diff < h) return `${Math.max(2, Math.round(diff / m))} minutes ago`;
+  if (diff < h) return `${Math.max(2, Math.round(diff / m))} mins ago`;
   if (diff < d) {
     const hh = Math.round(diff / h);
     return hh <= 1 ? "1 hour ago" : `${hh} hours ago`;
@@ -856,7 +870,7 @@ function renderSuggestions(list) {
   if (!suggestionsList) return;
   const visible = list.slice(0, 5);
   const hidden = list.slice(5);
-  const renderItem = (q, i) => `<li class="sc-reveal" style="transition-delay:${i * 60}ms"><a href="#" data-q="${escapeAttr(q)}">${escapeAttr(q)}</a></li>`;
+  const renderItem = (q, i) => `<li class="sc-reveal" style="transition-delay:${i * 60}ms"><a href="#" data-q="${escapeAttr(plainSuggestion(q))}">${suggestionInnerHTML(q)}</a></li>`;
   suggestionsList.innerHTML = visible.map((q, i) => renderItem(q, i)).join("");
   const moreList = suggestionsSection && suggestionsSection.querySelector(".sc-more .sc-list");
   if (moreList) moreList.innerHTML = hidden.map((q, i) => renderItem(q, i + visible.length)).join("");
@@ -919,6 +933,27 @@ function escapeAttr(s) {
   return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// The AI marks the most distinctive part of each suggestion with **double
+// asterisks** so we can render that span in bold. This helper:
+//   • plainSuggestion(): strips the markers — used wherever the raw search
+//     query is needed (data-q, history, fetching the actual SERP).
+//   • suggestionInnerHTML(): escapes for HTML, then converts the ** spans
+//     into <strong> tags — used for the visible text inside the link.
+function plainSuggestion(s) {
+  return String(s || "").replace(/\*\*/g, "");
+}
+function suggestionInnerHTML(s) {
+  const escaped = escapeAttr(s);
+  // Non-greedy match between ** pairs, no asterisks inside. \s* on either
+  // side of the captured group absorbs any stray whitespace the model put
+  // immediately inside the markers. Wrapped in a single <span> so the
+  // parent <a> (which is display: flex with gap: 10px) treats the whole
+  // suggestion — strong-tagged words and all — as one flex item, rather
+  // than splitting on the <strong> and inserting gaps between fragments.
+  const body = escaped.replace(/\*\*\s*([^*]+?)\s*\*\*/g, "<strong>$1</strong>");
+  return `<span>${body}</span>`;
+}
+
 function injectRowMenu(li) {
   if (li.querySelector(".sc-row-menu")) return;
   const dig = document.createElement("button");
@@ -951,7 +986,7 @@ let currentDigSimilarQuery = "";
 function renderSimilarItems(all) {
   const visible = all.slice(0, 3);
   const hidden = all.slice(3);
-  const renderItem = (q, i) => `<li class="sc-reveal" style="transition-delay:${i * 60}ms"><a href="#" data-q="${escapeAttr(q)}">${escapeAttr(q)}</a></li>`;
+  const renderItem = (q, i) => `<li class="sc-reveal" style="transition-delay:${i * 60}ms"><a href="#" data-q="${escapeAttr(plainSuggestion(q))}">${suggestionInnerHTML(q)}</a></li>`;
   digSimilarList.innerHTML = visible.map((q, i) => renderItem(q, i)).join("");
   // Continue the stagger past the visible ones so when "Show more" is opened
   // the hidden items keep the same cadence.
@@ -1182,6 +1217,17 @@ let activeRowMenuLi = null;
 function showRowMenu(trigger, li) {
   activeRowMenuLi = li;
   rowMenuPopup.hidden = false;
+  // Contextualise the "Remove" label: history rows are removed from the
+  // prototype's saved history list, every other section just hides a
+  // suggested row.
+  const removeBtn = rowMenuPopup.querySelector('[data-row-action="remove"]');
+  if (removeBtn) {
+    // Both the visible history list and its "Show more" overflow sit inside
+    // the section labelled "Search history", so a single closest() picks
+    // either up regardless of which sublist the row is in.
+    const inHistory = !!(li && li.closest('section[aria-label="Search history"]'));
+    removeBtn.textContent = inHistory ? "Remove from prototype history" : "Remove suggestion";
+  }
   const rect = trigger.getBoundingClientRect();
   rowMenuPopup.style.top = (rect.bottom + 4) + "px";
   rowMenuPopup.style.right = (window.innerWidth - rect.right) + "px";
@@ -1359,6 +1405,21 @@ function setupRovingTabindex() {
 // Advanced search form: build a Google query from the structured fields and
 // navigate the active tab. Mirrors what google.com/advanced_search does.
 const advancedForm = document.getElementById("advancedForm");
+const advancedEngineSelect = document.getElementById("advancedEngineSelect");
+
+if (advancedEngineSelect) {
+  // Populate from the same ENGINES list the main switcher uses; no icons.
+  advancedEngineSelect.innerHTML = ENGINES
+    .map((e) => `<option value="${escapeAttr(e.id)}">${escapeAttr(e.name)}</option>`)
+    .join("");
+  advancedEngineSelect.value = currentEngine.id;
+  advancedEngineSelect.addEventListener("change", (e) => {
+    // Routes through setEngine so the main switcher's pill, placeholder, and
+    // currentEngine global all stay in sync.
+    setEngine(e.target.value);
+  });
+}
+
 if (advancedForm) {
   advancedForm.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -1395,13 +1456,20 @@ if (advancedForm) {
     const q = parts.join(" ").trim();
     if (!q) return;
 
-    const params = new URLSearchParams({ client: "firefox-b-d", q });
-    if (time) params.set("tbs", `qdr:${time}`);
-    if (region) params.set("cr", region);
-    if (lang) params.set("lr", lang);
-    if (safe) params.set("safe", "active");
-
-    navigate("https://www.google.com/search?" + params.toString());
+    if (currentEngine.id === "google") {
+      // Keep the Google-specific richer params (region, language, recency,
+      // safe-search) since those only round-trip through Google.
+      const params = new URLSearchParams({ client: "firefox-b-d", q });
+      if (time) params.set("tbs", `qdr:${time}`);
+      if (region) params.set("cr", region);
+      if (lang) params.set("lr", lang);
+      if (safe) params.set("safe", "active");
+      navigate("https://www.google.com/search?" + params.toString());
+    } else {
+      // Other engines don't accept Google's filter params — pass the built
+      // query string through whichever engine the user selected.
+      navigate(currentEngine.url(q));
+    }
   });
 }
 

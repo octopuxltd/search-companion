@@ -15,7 +15,12 @@ const MODEL = "google/gemini-2.5-flash";
 const SUGGEST_SYS =
   "You generate related Google search queries that other people commonly run on the same topic. " +
   "Return ONLY a JSON object of the form {\"suggestions\":[...]} with exactly 12 short strings (2-6 words each). " +
-  "No prose, no commentary, no markdown fences. " +
+  "In each suggestion, wrap the meaningful, distinctive part(s) — the words that carry the search intent — in **double asterisks**. " +
+  "The emphasised span must be content-bearing: the core subject, a key qualifier (best, cheap, free, beginner), a format/source (youtube, reddit, pdf), a year, a comparison target, or a question word that genuinely distinguishes the query (e.g. 'how many', 'why does'). " +
+  "Never emphasise filler/connectors that follow the topic, such as 'are there', 'is it', 'do they', 'can you', 'for me' — those are not the distinctive part of a query. " +
+  "Prefer one emphasised span per suggestion; use two only when there are genuinely two separate distinctive parts (e.g. a qualifier at the start and a format at the end). Never use more than two. Each emphasised span should be 1-3 words. " +
+  "Place the asterisks tightly around the word(s), with no space inside the markers. " +
+  "No prose, no commentary, no markdown fences (other than the ** for emphasis). " +
   "Each item should be a complete search query, not a question with punctuation. " +
   "Vary the angles widely: comparisons, alternatives, deeper specifics, how-to, common follow-ups, mistakes to avoid, beginner questions, advanced techniques. " +
   "Use the same language as the input query.";
