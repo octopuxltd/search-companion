@@ -1,3 +1,50 @@
+// "Prototype update available" badge. While reviewing, force it on; once
+// happy, flip ALWAYS_SHOW_UPDATE_BADGE to false and the real version check
+// (against update.json on GitHub Pages) decides visibility.
+const ALWAYS_SHOW_UPDATE_BADGE = false;
+const UPDATE_JSON_URL = "https://octopuxltd.github.io/search-companion/update.json";
+
+(async function setupUpdateBadge() {
+  const badge = document.getElementById("updateBadge");
+  if (!badge) return;
+  if (ALWAYS_SHOW_UPDATE_BADGE) { badge.hidden = false; return; }
+
+  let running;
+  try {
+    if (typeof browser !== "undefined" && browser.runtime && browser.runtime.getManifest) {
+      running = browser.runtime.getManifest().version;
+    }
+  } catch (e) {}
+  if (!running) { badge.hidden = true; return; }
+
+  try {
+    const r = await fetch(UPDATE_JSON_URL, { cache: "no-cache" });
+    if (!r.ok) throw new Error("update.json " + r.status);
+    const j = await r.json();
+    // update.json shape: { addons: { "<id>": { updates: [{ version: "x.y.z", ... }, ...] } } }
+    const addon = j.addons && Object.values(j.addons)[0];
+    const updates = (addon && addon.updates) || [];
+    const latest = updates
+      .map((u) => u.version)
+      .filter(Boolean)
+      .sort(compareSemver)
+      .pop();
+    badge.hidden = !(latest && compareSemver(latest, running) > 0);
+  } catch (e) {
+    badge.hidden = true;
+  }
+})();
+
+function compareSemver(a, b) {
+  const pa = String(a).split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = String(b).split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
 // Stub the `browser.*` API when running outside a Firefox extension (e.g. file://
 // preview, plain browser). Lets the rest of the script run for layout/UX work.
 // Populate the settings page with the running extension's version. In the
@@ -12,7 +59,7 @@
       v = browser.runtime.getManifest().version;
     }
   } catch (e) {}
-  el.textContent = v || "1.0.4";
+  el.textContent = v || "1.0.6";
 })();
 
 if (typeof browser === "undefined") {
@@ -335,6 +382,9 @@ async function navigate(url) {
 function runSearch(q) {
   const query = (q || "").trim();
   if (!query) return;
+  // Kick the AI fan-out immediately so suggestions are already loading by the
+  // time the results page renders and the background re-syncs the query.
+  loadSuggestions(query);
   navigate(currentEngine.url(query));
 }
 
@@ -346,6 +396,9 @@ form.addEventListener("submit", (e) => {
 content.addEventListener("click", (e) => {
   const a = e.target.closest("a");
   if (!a) return;
+  // Let target="_blank" anchors (e.g. the update badge) follow normal browser
+  // behaviour and open in a new tab.
+  if (a.target === "_blank") return;
   e.preventDefault();
   if (a.dataset.q) {
     input.value = a.dataset.q;
@@ -406,9 +459,96 @@ function typeSummary(text) {
   }, 22);
 }
 
-function loadSummary(query) {
+// Track which query the Dig Deeper summary pane is currently showing, so
+// stale in-flight responses (from a previous query) can be discarded.
+let currentSummaryQuery = "";
+
+async function loadSummary(query) {
+  currentSummaryQuery = query;
   showSummarySkeleton();
-  setTimeout(() => typeSummary(summaryFor(query)), 900);
+  if (window.SC_AI && SC_AI.isConfigured()) {
+    try {
+      const text = await SC_AI.fetchSummary(query);
+      if (currentSummaryQuery !== query) return;
+      typeSummary((text && text.trim()) || summaryFor(query));
+      return;
+    } catch (e) {
+      if (currentSummaryQuery !== query) return;
+      // Fall through to the static placeholder.
+    }
+  }
+  // Worker not configured (or failed) — keep the existing demo behaviour.
+  setTimeout(() => {
+    if (currentSummaryQuery !== query) return;
+    typeSummary(summaryFor(query));
+  }, 900);
+}
+
+// --- "Other searches to try" suggestions ---------------------------------
+//
+// When a new query becomes active (form submit, sync from active tab, or
+// search-context message), fetch 6 related queries from the Worker, show
+// shimmering skeleton rows in the meantime, and pre-fetch their summaries
+// so Dig Deeper feels instant when clicked.
+
+const suggestionsList = document.getElementById("suggestionsList");
+// Snapshot the static markup so we can restore it if AI is disabled or fails.
+const suggestionsStaticHTML = suggestionsList ? suggestionsList.innerHTML : "";
+let currentSuggQuery = "";
+
+function aiSuggestEnabled() {
+  const cb = document.getElementById("settingAiSuggest");
+  return cb ? cb.checked : true;
+}
+
+function renderSuggestionSkeleton(n) {
+  if (!suggestionsList) return;
+  const widths = [78, 64, 86, 58, 72, 68];
+  let html = "";
+  for (let i = 0; i < n; i++) {
+    const w = widths[i % widths.length];
+    // data-q="" keeps the magnifying-glass ::before icon in place.
+    html += `<li class="sc-skel-row"><a href="#" data-q="" style="--skel-w:${w}%"><span class="sc-skel-line"></span></a></li>`;
+  }
+  suggestionsList.innerHTML = html;
+}
+
+function renderSuggestions(list) {
+  if (!suggestionsList) return;
+  suggestionsList.innerHTML = list
+    .map((q) => `<li><a href="#" data-q="${escapeAttr(q)}">${escapeAttr(q)}</a></li>`)
+    .join("");
+  suggestionsList.querySelectorAll("li").forEach(injectRowMenu);
+  setupRovingTabindex();
+}
+
+function restoreSuggestionsStatic() {
+  if (!suggestionsList) return;
+  suggestionsList.innerHTML = suggestionsStaticHTML;
+  suggestionsList.querySelectorAll("li").forEach(injectRowMenu);
+  setupRovingTabindex();
+}
+
+async function loadSuggestions(query) {
+  if (!query || !query.trim()) return;
+  if (!aiSuggestEnabled()) return;
+  if (!window.SC_AI || !SC_AI.isConfigured()) return;
+
+  currentSuggQuery = query;
+  renderSuggestionSkeleton(6);
+  try {
+    const list = await SC_AI.fetchSuggestions(query);
+    if (currentSuggQuery !== query) return;
+    if (list && list.length) {
+      renderSuggestions(list);
+      SC_AI.prefetchSummaries(list);
+    } else {
+      restoreSuggestionsStatic();
+    }
+  } catch (e) {
+    if (currentSuggQuery !== query) return;
+    restoreSuggestionsStatic();
+  }
 }
 
 function similarFor(query) {
@@ -542,13 +682,17 @@ digPanel.addEventListener("click", async (e) => {
 async function syncFromActiveTab() {
   try {
     const res = await browser.runtime.sendMessage({ type: "get-current-query" });
-    if (res && res.query) input.value = res.query;
+    if (res && res.query) {
+      input.value = res.query;
+      loadSuggestions(res.query);
+    }
   } catch (e) { /* background not ready */ }
 }
 
 browser.runtime.onMessage.addListener((msg) => {
   if (msg && msg.type === "search-context" && typeof msg.query === "string") {
     input.value = msg.query;
+    loadSuggestions(msg.query);
   }
 });
 
@@ -562,6 +706,55 @@ document.querySelectorAll(".sc-list a > .sc-meta").forEach((meta) => {
 // Inject the row's hover actions (Dig deeper pill and 3-dot menu) on every
 // list item. Both stay hidden until the row is hovered/focused.
 document.querySelectorAll(".sc-list li").forEach(injectRowMenu);
+
+// Tooltip pointing up at the submit arrow, shown after "Refine this search".
+const refineTip = document.getElementById("refineTip");
+const submitBtn = document.querySelector(".sc-submit");
+
+function positionRefineTip() {
+  if (!refineTip || refineTip.hidden || !submitBtn) return;
+  const r = submitBtn.getBoundingClientRect();
+  // Bubble sits 10px below the button, right-aligned so its caret points at
+  // the button. Caret offset matches the button's centre.
+  refineTip.style.visibility = "hidden";
+  refineTip.style.left = "0";
+  refineTip.style.top = "0";
+  const tipWidth = refineTip.offsetWidth;
+  const tipRight = Math.max(8, window.innerWidth - r.right - (r.width / 2 - 6));
+  refineTip.style.left = "auto";
+  refineTip.style.right = tipRight + "px";
+  refineTip.style.top = (r.bottom + 10) + "px";
+  // Caret position inside the tip — line it up with the button's horizontal centre.
+  const caretFromRight = (r.left + r.width / 2) - (window.innerWidth - tipRight - tipWidth);
+  // Express as offset from the tip's right edge so the ::before's `right` works.
+  const caretRightOffset = tipWidth - caretFromRight - 6;
+  refineTip.style.setProperty("--tip-caret-right", Math.max(8, caretRightOffset) + "px");
+  refineTip.style.visibility = "visible";
+}
+
+function showRefineTip() {
+  if (!refineTip) return;
+  refineTip.hidden = false;
+  positionRefineTip();
+}
+
+function hideRefineTip() {
+  if (!refineTip) return;
+  refineTip.hidden = true;
+}
+
+window.addEventListener("resize", positionRefineTip);
+window.addEventListener("scroll", positionRefineTip, true);
+// Dismiss when the user actually runs a search, presses Escape, or clicks
+// somewhere outside the search input.
+form.addEventListener("submit", hideRefineTip);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && refineTip && !refineTip.hidden) hideRefineTip();
+});
+// Any click anywhere (including the input itself) dismisses the tip.
+document.addEventListener("mousedown", () => {
+  if (refineTip && !refineTip.hidden) hideRefineTip();
+});
 
 // Row 3-dot menu: opens a small popup anchored under the clicked button.
 const rowMenuPopup = document.getElementById("rowMenuPopup");
@@ -594,7 +787,12 @@ document.addEventListener("click", (e) => {
       right: "google-didyoumean",
       domain: "taarget.com",
     });
-    navigate(base + "?" + p.toString());
+    const url = base + "?" + p.toString();
+    // Both calls must fire inside this synchronous click handler — Firefox
+    // requires a live user gesture for sidebarAction.close(), and navigate()'s
+    // awaits would forfeit it. Skipping its tab-dedupe is fine here.
+    try { browser.tabs.update({ url }); } catch (e) {}
+    try { if (browser.sidebarAction && browser.sidebarAction.close) browser.sidebarAction.close(); } catch (e) {}
     return;
   }
   const dig = e.target.closest(".sc-row-dig");
@@ -631,7 +829,14 @@ rowMenuPopup.addEventListener("click", (e) => {
   if (!li) return;
   const a = li.querySelector("a");
   const query = a && a.dataset.q;
-  if (action.dataset.rowAction === "remove") {
+  if (action.dataset.rowAction === "refine" && query) {
+    input.value = query;
+    input.focus();
+    // Place caret at the end so the user can immediately tweak the query.
+    const len = input.value.length;
+    try { input.setSelectionRange(len, len); } catch (e) {}
+    showRefineTip();
+  } else if (action.dataset.rowAction === "remove") {
     li.remove();
     setupRovingTabindex();
   } else if (action.dataset.rowAction === "dig" && query) {

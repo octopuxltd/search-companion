@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Search sidebar",
-  "version": "1.0.4",
+  "version": "1.0.6",
   "description": "Companion sidebar that opens on Google search result pages.",
   "browser_specific_settings": {
     "gecko": {
@@ -22,7 +22,8 @@
     "tabGroups",
     "activeTab",
     "*://www.google.com/*",
-    "*://www.google.co.uk/*"
+    "*://www.google.co.uk/*",
+    "https://*.workers.dev/*"
   ],
   "browser_action": {
     "default_title": "Search sidebar",
@@ -39,5 +40,12 @@
   },
   "background": {
     "scripts": ["background.js"]
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://octopuxltd.github.io/search-companion/*"],
+      "js": ["install-overlay.js"],
+      "run_at": "document_end"
+    }
+  ]
 }

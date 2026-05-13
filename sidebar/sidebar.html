@@ -120,9 +120,39 @@ html, body {
 
 .sc-search {
   display: flex;
+  align-items: center;
   gap: 6px;
   padding: 11.5px 14px;
 }
+
+/* Tiny "Prototype update available" badge — flagged when a newer prototype
+   build is available on the install page. Three short words stacked. */
+.sc-update-badge {
+  flex: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  font-size: 9px;
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 6px;
+  text-decoration: none;
+  white-space: nowrap;
+  /* Override the global `a { cursor: default }` rule for this one anchor — a
+     real link off to the install page deserves the hand cursor. */
+  cursor: pointer;
+}
+.sc-update-badge:hover { filter: brightness(1.08); }
+/* `display: inline-flex` above overrides the UA default for [hidden], so
+   restore it explicitly. */
+.sc-update-badge[hidden] { display: none; }
+.sc-update-badge:focus { outline: none; }
+.sc-update-badge:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .sc-search-engine-switcher {
   flex: none;
@@ -593,10 +623,38 @@ html, body {
 }
 
 .sc-version {
-  margin: 24px 0 0;
+  margin: 0 0 20px;
   font-size: 11px;
   color: var(--muted);
 }
+
+.sc-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--fg);
+  margin: 0 0 8px;
+}
+.sc-settings-row input[type="checkbox"] {
+  margin: 0;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.sc-settings-help {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.sc-settings-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 12px;
+  color: var(--fg);
+}
+.sc-settings-list li { margin: 2px 0; }
 
 /* Pages without a heading band (Advanced, Settings) — match the inner content
    padding the other sections get from their h2 band. */
@@ -768,6 +826,51 @@ html, body {
 @keyframes sc-skel-shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+/* Skeleton row for "Other searches to try" while AI is generating.
+   Re-uses the same magnifying-glass icon as a real suggestion (via the
+   a[data-q]::before rule above) and shows a shimmering bar where the text
+   would be. Hover/focus styles are suppressed so it doesn't look clickable. */
+.sc-list li.sc-skel-row { pointer-events: none; }
+.sc-list li.sc-skel-row:hover,
+.sc-list li.sc-skel-row:focus-within { background: transparent; }
+.sc-list li.sc-skel-row:hover::after,
+.sc-list li.sc-skel-row:focus-within::after { content: none; }
+.sc-list li.sc-skel-row > a { color: var(--fg); }
+.sc-list li.sc-skel-row .sc-skel-line {
+  flex: 1;
+  height: 12px;
+  max-width: var(--skel-w, 70%);
+}
+
+/* Tooltip shown after "Refine this search" — points up at the submit button
+   so the user knows to edit the term then click the arrow. */
+.sc-refine-tip {
+  position: fixed;
+  z-index: 40;
+  max-width: 240px;
+  padding: 8px 12px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 12px;
+  line-height: 1.4;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+}
+.sc-refine-tip::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: var(--tip-caret-right, 14px);
+  width: 10px;
+  height: 10px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  transform: rotate(45deg);
 }
 
 /* Blinking caret while the summary is being "typed" out. */
@@ -987,6 +1090,11 @@ body.is-settings .sc-search { display: none; }
           </svg>
         </button>
       </div>
+      <a class="sc-update-badge" id="updateBadge" href="https://octopuxltd.github.io/search-companion/" target="_blank" rel="noopener" hidden>
+        <span>Prototype</span>
+        <span>update</span>
+        <span>available</span>
+      </a>
     </form>
   </header>
 
@@ -1249,8 +1357,15 @@ body.is-settings .sc-search { display: none; }
 
   <div class="sc-content" id="tab-settings" role="tabpanel" aria-labelledby="tabbtn-settings" hidden>
     <section class="sc-section sc-section-plain" aria-label="Settings">
-      <p class="sc-help">Settings will go here — default search engine, suggestion sources, sync, keyboard shortcuts, and theme.</p>
       <p class="sc-version">Search Sidebar version <span id="settingsVersion">—</span></p>
+      <label class="sc-settings-row">
+        <input type="checkbox" id="settingAiSuggest" checked />
+        <span>Simulate suggestions with AI (slow)</span>
+      </label>
+      <p class="sc-settings-help">If you turn this off, suggestions are instant but only for these phrases:</p>
+      <ul class="sc-settings-list">
+        <li>wireless headphones</li>
+      </ul>
     </section>
   </div>
 
@@ -1278,11 +1393,15 @@ body.is-settings .sc-search { display: none; }
     </section>
   </div>
 
+  <div class="sc-refine-tip" id="refineTip" role="status" hidden>Edit this search term then click to search</div>
+
   <div class="sc-row-menu-popup" id="rowMenuPopup" role="menu" hidden>
-    <button type="button" data-row-action="remove" role="menuitem">Remove suggestion</button>
     <button type="button" data-row-action="dig" role="menuitem">Dig deeper without searching</button>
+    <button type="button" data-row-action="refine" role="menuitem">Refine this search</button>
+    <button type="button" data-row-action="remove" role="menuitem">Remove suggestion</button>
   </div>
 
+  <script src="ai.js"></script>
   <script src="sidebar.js"></script>
 </body>
 </html>

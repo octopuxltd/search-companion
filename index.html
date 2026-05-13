@@ -15,12 +15,26 @@
     .install:hover { filter: brightness(1.05); }
     .version { font-size: 13px; color: #6b6b6b; }
     @media (prefers-color-scheme: dark) { .version { color: #a8a8a8; } }
+    .currently { font-size: 13px; color: var(--accent); margin-top: 2px; }
+    .whats-new { margin-top: 22px; max-width: 380px; }
+    .whats-new h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: #6b6b6b; text-align: center; }
+    .whats-new ul { margin: 0; padding-left: 22px; font-size: 14px; color: var(--fg); }
+    .whats-new li { margin: 4px 0; }
+    @media (prefers-color-scheme: dark) { .whats-new h2 { color: #a8a8a8; } }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <a class="install" href="search-companion-1.0.4.xpi">Install the Search Sidebar extension</a>
-    <div class="version">Version 1.0.4</div>
+    <a class="install" href="search-companion-1.0.6.xpi">Install the latest Search Sidebar extension</a>
+    <div class="version">Version 1.0.6</div>
+    <div class="whats-new">
+      <h2>What’s new in 1.0.6</h2>
+      <ul>
+        <li>Search in split view from the Dig deeper page</li>
+        <li>Refine the suggested search terms from the ··· menu</li>
+        <li>Simulate domain not found</li>
+      </ul>
+    </div>
   </div>
 </body>
 </html>

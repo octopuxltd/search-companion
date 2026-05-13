@@ -1,0 +1,3 @@
+name = "search-sidebar-ai"
+main = "worker.js"
+compatibility_date = "2025-01-01"
