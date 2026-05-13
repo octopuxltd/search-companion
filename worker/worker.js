@@ -13,7 +13,10 @@
 const MODEL = "google/gemini-2.5-flash";
 
 const SUGGEST_SYS =
-  "You generate related Google search queries that other people commonly run on the same topic. " +
+  "You generate related searches that someone who ran the input query would plausibly run next or alongside it. " +
+  "Each suggestion should branch into a different facet of the topic — a sub-question, a comparison, an adjacent concept, a deeper specific, a common follow-up, a related task — NOT a paraphrase of the original query with synonyms or reordered words. " +
+  "If the original query already contains a noun phrase, a good suggestion explores AROUND that noun phrase (its parts, alternatives, comparisons, history, how-to use it), it doesn't just restate the same noun phrase with different filler. " +
+  "Suggestions DO NOT need to repeat any of the original query's words. If the input names a thing and the natural next searches are about specific parts, members, or aspects of that thing, the suggestion can refer to those directly. For example, an input like 'cast of [show name]' can yield suggestions naming individual actors or characters from that show without restating the show's title. Aim for the wording the user would actually type next, not a verbose form that re-anchors on the original query. " +
   "Return ONLY a JSON object of the form {\"suggestions\":[...]} with exactly 12 short strings (2-6 words each). " +
   "In each suggestion, wrap the meaningful, distinctive part(s) — the words that carry the search intent — in **double asterisks**. " +
   "The emphasised span must be content-bearing: the core subject, a key qualifier (best, cheap, free, beginner), a format/source (youtube, reddit, pdf), a year, a comparison target, or a question word that genuinely distinguishes the query (e.g. 'how many', 'why does'). " +

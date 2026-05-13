@@ -355,8 +355,38 @@ html, body {
 .sc-simulate-link:hover { color: var(--accent); }
 
 .sc-section {
+  position: relative;
   padding: 12px 6px 16px;
 }
+
+/* "Slow because / prototype" message overlaid in the middle of a skeleton
+   section once the request has taken longer than ~2.5s. Fades in/out via
+   the .is-visible class; the absolute positioning lets it sit over the
+   shimmer rows without affecting their layout. */
+.sc-slow-msg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 10px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 260ms ease;
+  pointer-events: none;
+}
+.sc-slow-msg.is-visible { opacity: 1; }
+.sc-slow-msg[hidden] { display: none; }
 
 /* Heading band — sticky under the global header. The inset top line gives every
    heading a 1px divider above it (including the first one in a panel) so the
@@ -994,6 +1024,28 @@ html, body {
   transform: rotate(45deg);
 }
 
+/* Pale-green "This tab is yet to be designed." banner, slotted into the
+   sticky header (above the search field, below the tab strip) on
+   prototype-only tabs. */
+.sc-ytbd-banner {
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #4a5a4d;
+  background: #e6ece6;
+  border-bottom: 1px solid #c8d2c8;
+  text-align: center;
+}
+.sc-ytbd-banner[hidden] { display: none; }
+@media (prefers-color-scheme: dark) {
+  .sc-ytbd-banner {
+    color: #a3b0a5;
+    background: #262d27;
+    border-bottom-color: #323a33;
+  }
+}
+
 /* Blinking caret while the summary is being "typed" out. */
 .sc-typing-caret {
   display: inline-block;
@@ -1187,6 +1239,8 @@ body.is-settings .sc-search { display: none; }
       </button>
     </nav>
 
+    <p class="sc-ytbd-banner" id="ytbdBanner" hidden>This tab is yet to be designed.</p>
+
     <form class="sc-search" id="searchForm" role="search">
       <div class="sc-input-wrap">
         <span class="sc-engine-wrap">
@@ -1226,8 +1280,12 @@ body.is-settings .sc-search { display: none; }
   </header>
 
   <div class="sc-content" id="tab-current" role="tabpanel" aria-labelledby="tabbtn-current">
-    <section class="sc-section" id="suggestionsSection" aria-label="Other searches to try" hidden>
-      <h2>Other searches to try</h2>
+    <section class="sc-section" id="suggestionsSection" aria-label="People also search for" hidden>
+      <h2>People also search for</h2>
+      <div class="sc-slow-msg" id="suggestionsSlowMsg" aria-hidden="true">
+        <span>Slow because</span>
+        <span>prototype</span>
+      </div>
       <ul class="sc-list" id="suggestionsList">
         <li><a href="#" data-q="best wireless headphones under £200">best wireless headphones under £200</a></li>
         <li><a href="#" data-q="noise cancelling headphones for flights">noise cancelling headphones for flights</a></li>
@@ -1311,7 +1369,11 @@ body.is-settings .sc-search { display: none; }
     </div>
 
     <section class="sc-section">
-      <h2>Similar searches</h2>
+      <h2>People also search for</h2>
+      <div class="sc-slow-msg" id="digSimilarSlowMsg" aria-hidden="true">
+        <span>Slow because</span>
+        <span>prototype</span>
+      </div>
       <ul class="sc-list" id="digSimilarList"></ul>
       <div class="sc-more" id="digSimilarMore"><ul class="sc-list" id="digSimilarMoreList"></ul></div>
       <button type="button" class="sc-show-more" id="digSimilarShowMore" aria-expanded="false" hidden>Show more</button>

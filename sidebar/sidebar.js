@@ -104,7 +104,7 @@ function compareSemver(a, b) {
       v = browser.runtime.getManifest().version;
     }
   } catch (e) {}
-  el.textContent = v || "1.0.9";
+  el.textContent = v || "1.0.10";
 })();
 
 if (typeof browser === "undefined") {
@@ -144,6 +144,13 @@ function updateClearBtnVisibility() {
 
 if (input) {
   input.addEventListener("input", updateClearBtnVisibility);
+  // Selecting all on focus lets the user start typing immediately to
+  // replace whatever query the input is currently showing. The select()
+  // is wrapped in a try because some focus paths (e.g. programmatic focus
+  // before the input is connected) can throw on older Firefox builds.
+  input.addEventListener("focus", () => {
+    try { input.select(); } catch (e) {}
+  });
 }
 if (searchClearBtn && input) {
   searchClearBtn.addEventListener("click", () => {
@@ -165,6 +172,9 @@ function applyTab(target) {
   });
   document.body.classList.toggle("is-advanced", target === "advanced");
   document.body.classList.toggle("is-settings", target === "settings");
+  // The "yet to be designed" banner is shared across three prototype tabs.
+  const ytbd = document.getElementById("ytbdBanner");
+  if (ytbd) ytbd.hidden = !(target === "advanced" || target === "saved" || target === "settings");
   if (target === "advanced") prefillAdvancedFromQuery(input && input.value);
 }
 
@@ -598,14 +608,43 @@ async function loadStoredHistory() {
   } catch (e) { return []; }
 }
 
+// Per-session ban list. Entries the user has explicitly removed — whether
+// they came from real storage or from the seed pool — go in here so they
+// stay gone even after a re-shuffle. Real entries also get removed from
+// storage so they don't come back on sidebar reload; seed removals are
+// session-scoped only.
+const removedHistoryQueries = new Set();
+
+// Drop a single entry from the persisted history. Match is case-insensitive
+// against the trimmed query so it lines up with the dedupe rule background
+// uses when writing entries.
+async function removeFromStoredHistory(query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return;
+  try {
+    if (typeof browser === "undefined" || !browser.storage || !browser.storage.local) return;
+    const data = await browser.storage.local.get("userHistory");
+    const list = Array.isArray(data.userHistory) ? data.userHistory : [];
+    const filtered = list.filter((e) => String((e && e.q) || "").trim().toLowerCase() !== q);
+    await browser.storage.local.set({ userHistory: filtered });
+    // storage.onChanged fires → initHistory() re-renders with one fewer
+    // real entry and one extra seed at the bottom, so the visible list
+    // stays at five items.
+  } catch (e) { /* swallow */ }
+}
+
 // Build the display list: real entries on top, padded with seed entries
 // given synthetic past timestamps so the list always looks lived-in.
 async function initHistory() {
-  const real = await loadStoredHistory();
+  // Filter both real and seed sources against the per-session removal set
+  // so explicit removals stick even when initHistory re-runs (e.g. after a
+  // background storage write triggers storage.onChanged).
+  const isRemoved = (q) => removedHistoryQueries.has(String(q || "").trim().toLowerCase());
+  const real = (await loadStoredHistory()).filter((e) => !isRemoved(e.q));
   const usedQueries = new Set(real.map((e) => String(e.q || "").toLowerCase()));
   const oldestRealTs = real.length ? real[real.length - 1].ts : Date.now();
   const seedSlotsNeeded = Math.max(0, 12 - real.length);
-  const seedQueries = shuffleArr(HISTORY_POOL).filter((q) => !usedQueries.has(q.toLowerCase()));
+  const seedQueries = shuffleArr(HISTORY_POOL).filter((q) => !usedQueries.has(q.toLowerCase()) && !isRemoved(q));
   const seeds = seedQueries.slice(0, seedSlotsNeeded).map((q, i) => ({
     q,
     // Step backwards from the oldest real entry (or now). Each subsequent
@@ -846,7 +885,32 @@ function setSuggestionsActive(query) {
   } else {
     suggestionsSection.hidden = true;
     currentSuggQuery = "";
+    stopSlowHint("suggestionsSlowMsg", "suggestions");
   }
+}
+
+// Helpers to show/hide a "Slow because / prototype" hint overlaid on a
+// skeleton section. The hint only fades in if the skeleton is still up
+// 2.5 seconds after the request started, and is removed instantly the
+// moment real content arrives (or the section clears).
+const SLOW_DELAY_MS = 2500;
+function startSlowHint(elementId, timerKey) {
+  stopSlowHint(elementId, timerKey);
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  el.classList.remove("is-visible");
+  startSlowHint._t = startSlowHint._t || {};
+  startSlowHint._t[timerKey] = setTimeout(() => {
+    el.classList.add("is-visible");
+  }, SLOW_DELAY_MS);
+}
+function stopSlowHint(elementId, timerKey) {
+  if (startSlowHint._t && startSlowHint._t[timerKey]) {
+    clearTimeout(startSlowHint._t[timerKey]);
+    startSlowHint._t[timerKey] = null;
+  }
+  const el = document.getElementById(elementId);
+  if (el) el.classList.remove("is-visible");
 }
 
 function renderSuggestionSkeleton(n) {
@@ -864,10 +928,12 @@ function renderSuggestionSkeleton(n) {
   if (moreList) moreList.innerHTML = "";
   const moreBtn = suggestionsSection && suggestionsSection.querySelector(".sc-show-more");
   if (moreBtn) moreBtn.hidden = true;
+  startSlowHint("suggestionsSlowMsg", "suggestions");
 }
 
 function renderSuggestions(list) {
   if (!suggestionsList) return;
+  stopSlowHint("suggestionsSlowMsg", "suggestions");
   const visible = list.slice(0, 5);
   const hidden = list.slice(5);
   const renderItem = (q, i) => `<li class="sc-reveal" style="transition-delay:${i * 60}ms"><a href="#" data-q="${escapeAttr(plainSuggestion(q))}">${suggestionInnerHTML(q)}</a></li>`;
@@ -890,6 +956,7 @@ function renderSuggestions(list) {
 
 function restoreSuggestionsStatic() {
   if (!suggestionsList) return;
+  stopSlowHint("suggestionsSlowMsg", "suggestions");
   suggestionsList.innerHTML = suggestionsStaticHTML;
   suggestionsList.querySelectorAll("li").forEach(injectRowMenu);
   setupRovingTabindex();
@@ -984,6 +1051,7 @@ const digSimilarShowMore = document.getElementById("digSimilarShowMore");
 let currentDigSimilarQuery = "";
 
 function renderSimilarItems(all) {
+  stopSlowHint("digSimilarSlowMsg", "digSimilar");
   const visible = all.slice(0, 3);
   const hidden = all.slice(3);
   const renderItem = (q, i) => `<li class="sc-reveal" style="transition-delay:${i * 60}ms"><a href="#" data-q="${escapeAttr(plainSuggestion(q))}">${suggestionInnerHTML(q)}</a></li>`;
@@ -1011,6 +1079,7 @@ function renderSimilarSkeleton() {
   digSimilarMore.classList.remove("is-open");
   digSimilarMore.inert = true;
   digSimilarShowMore.hidden = true;
+  startSlowHint("digSimilarSlowMsg", "digSimilar");
 }
 
 async function loadSimilarSearches(query) {
@@ -1306,8 +1375,26 @@ rowMenuPopup.addEventListener("click", (e) => {
     try { input.setSelectionRange(len, len); } catch (e) {}
     showRefineTip();
   } else if (action.dataset.rowAction === "remove") {
-    li.remove();
-    setupRovingTabindex();
+    const inHistory = !!li.closest('section[aria-label="Search history"]');
+    if (inHistory && query) {
+      const key = query.trim().toLowerCase();
+      // 1. Ban the query for the rest of the session so subsequent
+      //    initHistory() rebuilds can't shuffle it back in.
+      removedHistoryQueries.add(key);
+      // 2. Drop it from the current in-memory list and re-render
+      //    immediately. The hidden overflow slides up: position 5 (first
+      //    item behind "Show more") becomes the new position 4.
+      historyEntries = historyEntries.filter((e) => String(e.q || "").trim().toLowerCase() !== key);
+      renderHistory();
+      // 3. Persist by removing from storage too (no-op for seed entries,
+      //    which never existed there). This is fire-and-forget — the UI
+      //    above is already in sync.
+      removeFromStoredHistory(query);
+    } else {
+      // Non-history rows aren't persisted — just drop the DOM node.
+      li.remove();
+      setupRovingTabindex();
+    }
   } else if (action.dataset.rowAction === "dig" && query) {
     openDigDeeper(query);
   }

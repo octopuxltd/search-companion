@@ -108,6 +108,97 @@ browser.notifications.onClicked.addListener((id) => {
   browser.notifications.clear(id);
 });
 
+// --- Theme-coloured chrome icons ------------------------------------------
+//
+// `theme_icons` and `sidebarAction.setIcon({ path })` can only switch
+// between pre-baked variants — they can't pick up the theme's actual
+// accent colour (only Mozilla-signed system add-ons get `context-fill`,
+// per Bugzilla 1377302). Workaround: load the silhouette SVG, rasterise
+// it onto a canvas, recolour the pixels to the theme's icon colour, and
+// hand the result to setIcon as ImageData. Re-runs on theme change.
+
+const SILHOUETTE_URL = browser.runtime.getURL("images/search-icon-silhouette-v1.svg");
+const ICON_SIZES = [16, 32, 48, 64, 96, 128];
+let silhouetteImagePromise = null;
+
+function loadSilhouette() {
+  if (silhouetteImagePromise) return silhouetteImagePromise;
+  silhouetteImagePromise = new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = SILHOUETTE_URL;
+  });
+  return silhouetteImagePromise;
+}
+
+function rasteriseTinted(img, size, color) {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0, size, size);
+  // source-in keeps only the pixels already painted, then paints with the
+  // theme colour — turns the black silhouette into a flat-coloured icon.
+  ctx.globalCompositeOperation = "source-in";
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, size, size);
+  return ctx.getImageData(0, 0, size, size);
+}
+
+function pickIconColour(theme, kind) {
+  const c = (theme && theme.colors) || {};
+  // `kind` is "toolbar" or "sidebar". Prefer surface-specific colours, fall
+  // back to the toolbar palette, then to tab text.
+  const order = kind === "sidebar"
+    ? [c.sidebar_text, c.icons, c.toolbar_text, c.tab_background_text]
+    : [c.icons, c.toolbar_text, c.tab_background_text];
+  for (const cand of order) {
+    if (typeof cand === "string" && cand.trim()) return cand.trim();
+    // Firefox sometimes returns rgba as an array of four numbers.
+    if (Array.isArray(cand) && cand.length >= 3) {
+      const [r, g, b, a = 1] = cand;
+      return `rgba(${r}, ${g}, ${b}, ${a})`;
+    }
+  }
+  // No theme data — use OS preference as a last resort.
+  try {
+    return matchMedia("(prefers-color-scheme: dark)").matches ? "#ffffff" : "#181822";
+  } catch (e) {
+    return "#181822";
+  }
+}
+
+async function applyThemedIcons() {
+  let img;
+  try { img = await loadSilhouette(); } catch (e) { return; }
+
+  let theme = {};
+  try { theme = (await browser.theme.getCurrent()) || {}; } catch (e) {}
+
+  const toolbarColour = pickIconColour(theme, "toolbar");
+  const sidebarColour = pickIconColour(theme, "sidebar");
+
+  const toolbarData = {};
+  const sidebarData = {};
+  for (const size of ICON_SIZES) {
+    toolbarData[size] = rasteriseTinted(img, size, toolbarColour);
+    // Only re-rasterise the sidebar set if its colour differs — avoid
+    // duplicate work for themes that don't define a separate sidebar text.
+    sidebarData[size] = sidebarColour === toolbarColour
+      ? toolbarData[size]
+      : rasteriseTinted(img, size, sidebarColour);
+  }
+
+  try { await browser.browserAction.setIcon({ imageData: toolbarData }); } catch (e) {}
+  try { await browser.sidebarAction.setIcon({ imageData: sidebarData }); } catch (e) {}
+}
+
+if (browser.theme && browser.theme.onUpdated) {
+  browser.theme.onUpdated.addListener(applyThemedIcons);
+}
+applyThemedIcons();
+
 async function handleTab(tabId, url) {
   const serp = detectSerp(url);
   if (serp) {
