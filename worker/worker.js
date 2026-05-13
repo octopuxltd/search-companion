@@ -14,17 +14,19 @@ const MODEL = "google/gemini-2.5-flash";
 
 const SUGGEST_SYS =
   "You generate related Google search queries that other people commonly run on the same topic. " +
-  "Return ONLY a JSON object of the form {\"suggestions\":[...]} with exactly 6 short strings (2-6 words each). " +
+  "Return ONLY a JSON object of the form {\"suggestions\":[...]} with exactly 12 short strings (2-6 words each). " +
   "No prose, no commentary, no markdown fences. " +
   "Each item should be a complete search query, not a question with punctuation. " +
-  "Vary the angles: comparisons, alternatives, deeper specifics, how-to, common follow-ups. " +
+  "Vary the angles widely: comparisons, alternatives, deeper specifics, how-to, common follow-ups, mistakes to avoid, beginner questions, advanced techniques. " +
   "Use the same language as the input query.";
 
 const SUMMARY_SYS =
   "You write a brief, factual informational summary about a search topic. " +
   "Plain prose, no markdown, no headings, no preface ('Here is...', etc.). " +
-  "Two short paragraphs, around 80-120 words total. " +
+  "Hard limit: 450 characters total, including spaces and punctuation. Aim for one tight paragraph; stop before 450 even if you have more to say. " +
   "Use the same language as the input query.";
+
+const SUMMARY_HARD_CAP = 450;
 
 export default {
   async fetch(request, env) {
@@ -97,7 +99,7 @@ async function getSuggestions(env, query) {
 }
 
 function parseSuggestions(content) {
-  const tryArray = (val) => Array.isArray(val) ? val.slice(0, 6).map((s) => String(s).trim()).filter(Boolean) : null;
+  const tryArray = (val) => Array.isArray(val) ? val.slice(0, 12).map((s) => String(s).trim()).filter(Boolean) : null;
 
   // Strip ``` fences the model might add despite being told not to.
   const cleaned = content.replace(/```(?:json)?/gi, "").trim();
@@ -119,7 +121,18 @@ async function getSummary(env, query) {
     { role: "system", content: SUMMARY_SYS },
     { role: "user", content: `Topic: ${query}` },
   ]);
-  return content.trim();
+  let trimmed = content.trim();
+  // Belt-and-braces: enforce the cap server-side even if the model overshoots.
+  // Trim back to the last sentence boundary inside the cap so it doesn't end
+  // mid-word.
+  if (trimmed.length > SUMMARY_HARD_CAP) {
+    const slice = trimmed.slice(0, SUMMARY_HARD_CAP);
+    const lastStop = Math.max(slice.lastIndexOf("."), slice.lastIndexOf("!"), slice.lastIndexOf("?"));
+    trimmed = lastStop > SUMMARY_HARD_CAP * 0.6
+      ? slice.slice(0, lastStop + 1)
+      : slice.replace(/\s+\S*$/, "") + "…";
+  }
+  return trimmed;
 }
 
 function json(data, status = 200) {

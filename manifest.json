@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Search sidebar",
-  "version": "1.0.6",
+  "version": "1.0.8",
   "description": "Companion sidebar that opens on Google search result pages.",
   "browser_specific_settings": {
     "gecko": {
@@ -21,6 +21,9 @@
     "tabs",
     "tabGroups",
     "activeTab",
+    "storage",
+    "notifications",
+    "alarms",
     "*://www.google.com/*",
     "*://www.google.co.uk/*",
     "https://*.workers.dev/*"

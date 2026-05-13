@@ -307,6 +307,31 @@ html, body {
 .sc-submit:focus { outline: none; }
 .sc-submit:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+/* Clear-input button — sits to the left of the submit arrow inside the
+   search pill. Mirrors the submit button's muted-to-accent hover. */
+.sc-clear {
+  flex: none;
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--muted);
+}
+.sc-clear:hover { color: var(--accent); background: rgba(0,0,0,0.05); }
+@media (prefers-color-scheme: dark) {
+  .sc-clear:hover { background: rgba(255,255,255,0.08); }
+}
+.sc-clear:focus { outline: none; }
+.sc-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sc-clear[hidden] { display: none; }
+
 .sc-content {
   padding: 0 0 4px;
 }
@@ -665,7 +690,21 @@ html, body {
 
 /* Dig Deeper page */
 .sc-dig-page-head {
+  position: sticky;
+  top: var(--sticky-header, 86px);
+  z-index: 6;
   padding: 4px 6px 14px;
+  background: var(--bg);
+}
+
+/* Push section headings inside Dig deeper down by the dig-head height so they
+   stack below the sticky back button + query, rather than colliding with it.
+   Subtract 1px so the heading overlaps the dig-head's bottom edge by a hair —
+   sub-pixel rendering would otherwise leave a 1px seam through which scrolling
+   content is briefly visible. dig-head's higher z-index keeps it painting on
+   top. */
+#tab-dig .sc-section h2 {
+  top: calc(var(--sticky-header, 86px) + var(--dig-head-height, 0px) - 1px);
 }
 
 /* The back button's icon and text line up with the magnifying-glass icons
@@ -833,6 +872,15 @@ html, body {
    a[data-q]::before rule above) and shows a shimmering bar where the text
    would be. Hover/focus styles are suppressed so it doesn't look clickable. */
 .sc-list li.sc-skel-row { pointer-events: none; }
+.sc-list li.sc-skel-row > a {
+  /* Match the measured real-row height so skeleton rows are interchangeable
+     with text rows in vertical layout. --skel-row-h is set at runtime; the
+     fallback covers the brief moment before the first measurement runs. */
+  min-height: var(--skel-row-h, 34px);
+}
+/* Fade the shimmer bar only — keep the magnifying-glass icon at full
+   muted strength so the row still reads as a search suggestion. */
+.sc-list li.sc-skel-row .sc-skel-line { opacity: 0.35; }
 .sc-list li.sc-skel-row:hover,
 .sc-list li.sc-skel-row:focus-within { background: transparent; }
 .sc-list li.sc-skel-row:hover::after,
@@ -840,16 +888,79 @@ html, body {
 .sc-list li.sc-skel-row > a { color: var(--fg); }
 .sc-list li.sc-skel-row .sc-skel-line {
   flex: 1;
-  height: 12px;
+  /* Match the real text line height so a skeleton row is the same total
+     height as a populated row. --skel-line-h is measured at runtime; the
+     fallback covers the brief moment before the measurement runs. */
+  height: var(--skel-line-h, 18px);
   max-width: var(--skel-w, 70%);
 }
+
+/* Sequential reveal for suggestion rows once the AI list arrives. Each item
+   starts at zero opacity and fades in via a transition; per-item delay
+   (inlined as transition-delay) staggers them top-down. Transitions don't
+   restart when a parent element is hidden and re-shown, so navigating into
+   Dig deeper and back leaves the rows sitting where they were. */
+.sc-list li.sc-reveal {
+  opacity: 0;
+  transition: opacity 220ms ease-out;
+}
+.sc-list li.sc-reveal.sc-reveal-on {
+  opacity: 1;
+}
+
+/* First-run privacy disclaimer overlay. Must be dismissed with Agree before
+   the sidebar is usable. Plain white card with content anchored at the top. */
+.sc-disclaimer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 24px 24px;
+  background: var(--bg);
+  color: var(--fg);
+}
+.sc-disclaimer[hidden] { display: none; }
+.sc-disclaimer-card {
+  max-width: 360px;
+  text-align: center;
+}
+.sc-disclaimer-card h2 {
+  margin: 0 0 12px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.sc-disclaimer-card p {
+  margin: 0 0 22px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--fg);
+}
+.sc-disclaimer-agree {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 9px 26px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.sc-disclaimer-agree:hover { filter: brightness(1.05); }
+.sc-disclaimer-agree:focus { outline: none; }
+.sc-disclaimer-agree:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Tooltip shown after "Refine this search" — points up at the submit button
    so the user knows to edit the term then click the arrow. */
 .sc-refine-tip {
   position: fixed;
   z-index: 40;
-  max-width: 240px;
+  max-width: 170px;
   padding: 8px 12px;
   background: var(--bg);
   color: var(--fg);
@@ -859,6 +970,16 @@ html, body {
   border-radius: 6px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
   pointer-events: none;
+}
+
+/* One-time soft outward glow when the tip first appears. The accent-coloured
+   ring grows and fades, then the regular drop-shadow stays put. */
+@keyframes sc-refine-tip-glow {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent), 0 4px 14px rgba(0, 0, 0, 0.12); }
+  100% { box-shadow: 0 0 0 16px color-mix(in srgb, var(--accent) 0%, transparent), 0 4px 14px rgba(0, 0, 0, 0.12); }
+}
+.sc-refine-tip.is-fresh {
+  animation: sc-refine-tip-glow 1.4s ease-out 1;
 }
 .sc-refine-tip::before {
   content: "";
@@ -1084,6 +1205,11 @@ body.is-settings .sc-search { display: none; }
           autocomplete="off"
           spellcheck="false"
         />
+        <button type="button" class="sc-clear" id="searchClearBtn" aria-label="Clear search" hidden>
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+            <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </button>
         <button type="submit" class="sc-submit" aria-label="Search">
           <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true">
             <path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1099,7 +1225,7 @@ body.is-settings .sc-search { display: none; }
   </header>
 
   <div class="sc-content" id="tab-current" role="tabpanel" aria-labelledby="tabbtn-current">
-    <section class="sc-section" aria-label="Other searches to try">
+    <section class="sc-section" id="suggestionsSection" aria-label="Other searches to try" hidden>
       <h2>Other searches to try</h2>
       <ul class="sc-list" id="suggestionsList">
         <li><a href="#" data-q="best wireless headphones under £200">best wireless headphones under £200</a></li>
@@ -1394,6 +1520,16 @@ body.is-settings .sc-search { display: none; }
   </div>
 
   <div class="sc-refine-tip" id="refineTip" role="status" hidden>Edit this search term then click to search</div>
+
+  <!-- One-time disclaimer shown until the user clicks Agree. Blocks the
+       entire sidebar; agreement is persisted in browser.storage.local. -->
+  <div class="sc-disclaimer" id="disclaimerOverlay" role="dialog" aria-modal="true" aria-labelledby="disclaimerTitle" hidden>
+    <div class="sc-disclaimer-card">
+      <h2 id="disclaimerTitle">Search sidebar prototype privacy</h2>
+      <p id="disclaimerMsg">Any real searches you do in Firefox while this prototype is open are sent to an AI model to generate simulated suggestions. Do not make any private searches while running this extension.</p>
+      <button type="button" id="disclaimerAgreeBtn" class="sc-disclaimer-agree">Agree</button>
+    </div>
+  </div>
 
   <div class="sc-row-menu-popup" id="rowMenuPopup" role="menu" hidden>
     <button type="button" data-row-action="dig" role="menuitem">Dig deeper without searching</button>

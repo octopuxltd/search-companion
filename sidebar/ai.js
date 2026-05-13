@@ -6,7 +6,7 @@
 // they reset when the sidebar reloads. No abort: stale in-flight requests
 // resolve into the cache, the UI just ignores them (see sidebar.js).
 
-const WORKER_URL = "https://REPLACE-ME.workers.dev/";
+const WORKER_URL = "https://search-sidebar-ai.cloudflare-ktncw.workers.dev/";
 
 function isConfigured() {
   return typeof WORKER_URL === "string" && !WORKER_URL.includes("REPLACE-ME");
@@ -16,8 +16,9 @@ function normKey(q) {
   return String(q || "").trim().toLowerCase();
 }
 
-const suggestionsCache = new Map(); // key -> Promise<string[]>
-const summaryCache = new Map();     // key -> Promise<string>
+const suggestionsCache = new Map();         // key -> Promise<string[]>
+const summaryCache = new Map();             // key -> Promise<string>
+const resolvedSuggestions = new Map();      // key -> string[]  (sync-readable mirror)
 
 async function callWorker(kind, query) {
   if (!isConfigured()) throw new Error("worker URL not configured");
@@ -28,7 +29,8 @@ async function callWorker(kind, query) {
   });
   if (!r.ok) {
     let detail = "";
-    try { detail = (await r.json()).error || ""; } catch {}
+    try { detail = (await r.clone().json()).error || ""; } catch {}
+    if (!detail) { try { detail = (await r.clone().text()).slice(0, 200); } catch {} }
     throw new Error(`worker ${r.status}${detail ? ": " + detail : ""}`);
   }
   return r.json();
@@ -39,13 +41,32 @@ function fetchSuggestions(query) {
   if (!key) return Promise.resolve([]);
   if (suggestionsCache.has(key)) return suggestionsCache.get(key);
   const p = callWorker("suggestions", query)
-    .then((j) => Array.isArray(j.suggestions) ? j.suggestions : [])
+    .then((j) => {
+      // Normalise to lowercase — the model sometimes title-cases or
+      // sentence-cases items, but the sidebar's visual convention is all
+      // lowercase to match the surrounding suggestion lists.
+      const arr = Array.isArray(j.suggestions)
+        ? j.suggestions.map((s) => String(s).toLowerCase().trim()).filter(Boolean)
+        : [];
+      // Mirror to the sync-readable cache so other parts of the UI (Dig
+      // deeper) can check synchronously whether suggestions are ready.
+      resolvedSuggestions.set(key, arr);
+      return arr;
+    })
     .catch((err) => {
       suggestionsCache.delete(key); // don't cache failures
       throw err;
     });
   suggestionsCache.set(key, p);
   return p;
+}
+
+// Returns the cached suggestions array for a query if and only if the
+// fetch has already resolved — used by code paths that want to render
+// instantly when the data is in hand, without flashing a skeleton.
+function getCachedSuggestions(query) {
+  const key = normKey(query);
+  return resolvedSuggestions.get(key) || null;
 }
 
 function fetchSummary(query) {
@@ -75,6 +96,7 @@ window.SC_AI = {
   fetchSuggestions,
   fetchSummary,
   prefetchSummaries,
+  getCachedSuggestions,
   summaryCache,
   suggestionsCache,
 };

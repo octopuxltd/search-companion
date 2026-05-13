@@ -13,7 +13,9 @@ const query = params.get("q") || "";
 const kind = params.get("kind") || "google";
 const domain = params.get("domain") || "";
 
-document.title = "Search: " + (query || kind);
+document.title = kind === "firefox-dnf"
+  ? "Server Not Found. We’re having trouble finding that site"
+  : "Search: " + (query || kind);
 
 function escapeHtml(s) {
   return String(s)
@@ -366,13 +368,13 @@ function dnfBuilder() {
     styles: `
       html, body { margin: 0; padding: 0; height: 100%; background: #fff; }
       body { font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: #15141a; }
-      .wrap { max-width: 580px; margin: 0; padding: 56px 56px 0; }
+      .wrap { max-width: 380px; margin: 0 auto; padding: 56px 20px 0; }
       .icon { display: block; width: 140px; height: auto; margin-bottom: 22px; }
-      h1 { font-size: 28px; font-weight: 600; margin: 0 0 14px; letter-spacing: -0.01em; line-height: 1.2; color: #15141a; }
+      h1 { font-size: 28px; font-weight: 300; margin: 0 0 14px; letter-spacing: -0.01em; line-height: 1.2; color: #15141a; }
       p { font-size: 14px; color: #5b5b66; margin: 0 0 12px; }
       .url { font-weight: 600; color: #15141a; }
-      .search-label { font-size: 14px; color: #5b5b66; margin: 18px 0 6px; }
-      .search { display: flex; align-items: center; gap: 6px; margin: 0 0 22px; padding: 4px; background: #fff; border: 1px solid #ccc; border-radius: 999px; box-shadow: 0 0 6px rgba(0,0,0,0.05); }
+      .what { font-size: 14px; font-weight: 500; color: #15141a; margin: 18px 0 8px; }
+      .search { display: flex; align-items: center; gap: 6px; margin: 6px 0 12px; padding: 4px; background: #fff; border: 1px solid #ccc; border-radius: 999px; box-shadow: 0 0 6px rgba(0,0,0,0.05); }
       .search:focus-within { border-color: #0061e0; box-shadow: 0 0 0 4px rgba(0, 97, 224, 0.12), 0 0 14px 2px rgba(0, 97, 224, 0.12); }
       .engine-wrap { position: relative; display: inline-flex; }
       .engine-wrap > summary { list-style: none; }
@@ -391,6 +393,9 @@ function dnfBuilder() {
       .search input::-webkit-search-cancel-button, .search input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
       .submit { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; background: transparent; border: none; border-radius: 50%; color: #6b6b6b; cursor: pointer; }
       .submit:hover { color: #0061e0; background: rgba(0,0,0,0.05); }
+      .clear { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; background: transparent; border: none; border-radius: 50%; color: #6b6b6b; cursor: pointer; }
+      .clear:hover { color: #0061e0; background: rgba(0,0,0,0.05); }
+      .clear[hidden] { display: none; }
       ul { padding-left: 22px; color: #5b5b66; margin: 0 0 22px; }
       li { margin-bottom: 6px; }
       .btn { display: inline-block; margin-top: 4px; padding: 8px 18px; background: #0061e0; color: #fff; border: none; border-radius: 4px; font-weight: 600; font-size: 14px; }
@@ -398,42 +403,49 @@ function dnfBuilder() {
     body: `
       <div class="wrap">
         <img class="icon" src="../images/no-connection.svg" alt="" />
-        <h1>We’re having trouble finding that site.</h1>
-        <p>We can’t connect to the server at <span class="url">${escapeHtml(domain || "the requested address")}</span>.</p>
-        <p class="search-label">Let’s try searching instead</p>
-        <form class="search" id="dnfForm">
-          <details class="engine-wrap" id="engineWrap">
-            <summary>
-              <span class="engine" aria-label="Change search engine">
-                <span class="circle" id="engineIcon" aria-hidden="true">${MINI_ICONS.google}</span>
-                <svg class="chev" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
-                  <path d="M2 4.5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-            </summary>
-            <div class="engine-panel" role="menu">
-              ${Object.keys(MINI_ICONS).map((id, i) => `
-                <button type="button" class="engine-item${i === 0 ? " is-current" : ""}" data-engine="${id}" role="menuitem">
-                  <span class="engine-mini" aria-hidden="true">${MINI_ICONS[id]}</span>
-                  <span>${ENGINE_NAMES[id]}</span>
-                </button>
-              `).join("")}
-            </div>
-          </details>
-          <input type="search" name="q" value="taarget" autocomplete="off" />
-          <button type="submit" class="submit" aria-label="Search">
-            <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true">
-              <path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        </form>
-        <p>If you entered the right address, you can:</p>
+        <h1>Server not found</h1>
+        <p>Firefox can’t connect to the server at <span class="url">${escapeHtml(domain || "the requested address")}</span></p>
+        <p class="what">What can you do about it?</p>
         <ul>
-          <li>Try again later</li>
-          <li>Check your network connection</li>
-          <li>Check that Firefox has permission to access the web (you might be connected but behind a firewall)</li>
+          <li>
+            Try searching
+            <form class="search" id="dnfForm">
+              <details class="engine-wrap" id="engineWrap">
+                <summary>
+                  <span class="engine" aria-label="Change search engine">
+                    <span class="circle" id="engineIcon" aria-hidden="true">${MINI_ICONS.google}</span>
+                    <svg class="chev" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+                      <path d="M2 4.5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </span>
+                </summary>
+                <div class="engine-panel" role="menu">
+                  ${Object.keys(MINI_ICONS).map((id, i) => `
+                    <button type="button" class="engine-item${i === 0 ? " is-current" : ""}" data-engine="${id}" role="menuitem">
+                      <span class="engine-mini" aria-hidden="true">${MINI_ICONS[id]}</span>
+                      <span>${ENGINE_NAMES[id]}</span>
+                    </button>
+                  `).join("")}
+                </div>
+              </details>
+              <input type="search" name="q" value="taarget" autocomplete="off" />
+              <button type="button" class="clear" id="dnfClearBtn" aria-label="Clear search">
+                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                  <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                </svg>
+              </button>
+              <button type="submit" class="submit" aria-label="Search">
+                <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true">
+                  <path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </form>
+          </li>
+          <li>Try connecting on a different device</li>
+          <li>Check your modem or router</li>
+          <li>Disconnect and reconnect to Wi-Fi</li>
         </ul>
-        <button class="btn">Try Again</button>
+        <button class="btn">Try again</button>
       </div>
     `,
   };
@@ -464,7 +476,15 @@ if (kind === "firefox-dnf") {
   const icon = document.getElementById("engineIcon");
   const form = document.getElementById("dnfForm");
   const input = form && form.querySelector('input[name="q"]');
+  const clearBtn = document.getElementById("dnfClearBtn");
   let currentId = "google";
+
+  function syncClear() { if (clearBtn) clearBtn.hidden = !(input && input.value); }
+  if (input) input.addEventListener("input", syncClear);
+  if (clearBtn && input) {
+    clearBtn.addEventListener("click", () => { input.value = ""; syncClear(); input.focus(); });
+  }
+  syncClear();
 
   document.querySelectorAll(".engine-item").forEach((btn) => {
     btn.addEventListener("click", () => {
