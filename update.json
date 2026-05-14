@@ -3,6 +3,10 @@
     "search-companion@paulannett.co.uk": {
       "updates": [
         {
+          "version": "1.0.11",
+          "update_link": "https://octopuxltd.github.io/search-companion/search-companion-1.0.11.xpi"
+        },
+        {
           "version": "1.0.10",
           "update_link": "https://octopuxltd.github.io/search-companion/search-companion-1.0.10.xpi"
         },
