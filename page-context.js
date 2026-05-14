@@ -67,62 +67,43 @@ browser.runtime.onMessage.addListener((msg) => {
   }
 });
 
-// SPA navigation: intercept pushState / replaceState so navigations that
-// don't trigger a real page load still notify the background. We wait for
-// document.title to change (the SPA's signal that new content has loaded)
-// rather than using a fixed delay, since pushState fires before the new
-// content is in the DOM.
+// SPA navigation: watch document.title via MutationObserver (DOM mutations are
+// visible to content scripts regardless of JS-world isolation). When the title
+// changes AND the URL has also changed, it's a SPA navigation — send the new
+// context. We can't intercept history.pushState directly because Firefox
+// isolates content-script JS from the page's JS, so property patches on
+// history.* never receive page-level calls.
 (function interceptSpaNavigation() {
-  let pendingObserver = null;
-  let fallbackTimer = null;
+  let lastUrl = location.href.split("#")[0];
   let settleTimer = null;
 
-  function cancelPending() {
-    if (pendingObserver) { pendingObserver.disconnect(); pendingObserver = null; }
-    clearTimeout(fallbackTimer);
+  function onTitleMutation() {
     clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      const currentUrl = location.href.split("#")[0];
+      if (currentUrl === lastUrl) return; // title changed without a URL change — ignore
+      lastUrl = currentUrl;
+      browser.runtime.sendMessage({
+        type: "page-context",
+        title: document.title || "",
+        url: location.href,
+        text: extractPageText(),
+      }).catch(() => {});
+    }, 300);
   }
 
-  function sendContext() {
-    cancelPending();
-    browser.runtime.sendMessage({
-      type: "page-context",
-      title: document.title || "",
-      url: location.href,
-      text: extractPageText(),
-    }).catch(() => {});
+  const titleEl = document.querySelector("title");
+  if (titleEl) {
+    new MutationObserver(onTitleMutation).observe(titleEl, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
   }
 
-  function onSpaNavigate() {
-    cancelPending();
-    const titleAtNav = document.title;
-    const titleEl = document.querySelector("title");
-
-    if (titleEl) {
-      pendingObserver = new MutationObserver(() => {
-        if (document.title !== titleAtNav) {
-          // Title changed — give content a moment to settle, then extract.
-          pendingObserver.disconnect();
-          pendingObserver = null;
-          clearTimeout(fallbackTimer);
-          settleTimer = setTimeout(sendContext, 150);
-        }
-      });
-      pendingObserver.observe(titleEl, { childList: true, characterData: true, subtree: true });
-    }
-
-    // Safety net: send after 2 s even if the title never changes.
-    fallbackTimer = setTimeout(sendContext, 2000);
-  }
-
-  for (const method of ["pushState", "replaceState"]) {
-    const original = history[method];
-    history[method] = function (...args) {
-      const result = original.apply(this, args);
-      onSpaNavigate();
-      return result;
-    };
-  }
-
-  window.addEventListener("popstate", onSpaNavigate);
+  // popstate covers back/forward navigation (URL changes before title settles).
+  window.addEventListener("popstate", () => {
+    lastUrl = ""; // force URL-change check on next mutation or timer
+    onTitleMutation();
+  });
 })();
