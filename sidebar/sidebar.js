@@ -2404,6 +2404,12 @@ browser.runtime.onMessage.addListener((msg) => {
   }
   if (msg && msg.type === "page-context" && typeof msg.url === "string") {
     _sclog("← page-context msg", { url: msg.url.slice(0, 80), title: (msg.title || "").slice(0, 60), textLen: (msg.text || "").length });
+    // Capture duplicate state before setSuggestionsActive updates it — SPA
+    // navigation can fire a second message for the same URL with the leaving
+    // page's title; the duplicate-URL guard in setSuggestionsActive drops it,
+    // and we must also skip recordPageVisit so stale topics don't re-render
+    // the related panels.
+    const isPageDuplicate = currentSuggKind === "page" && currentSuggSourceKey === msg.url;
     // Page-derived suggestions don't fill the search input — the input is
     // for queries the user types, not for current-URL state.
     setSuggestionsActive({
@@ -2413,7 +2419,7 @@ browser.runtime.onMessage.addListener((msg) => {
       text: msg.text || "",
     });
     // Record the visit for the Firefox Related tab (post-consent, fire-and-forget).
-    if (msg.title) recordPageVisit(msg.url, msg.title, msg.text || "").catch(() => {});
+    if (!isPageDuplicate && msg.title) recordPageVisit(msg.url, msg.title, msg.text || "").catch(() => {});
     return;
   }
   if (msg && msg.type === "blocked-context" && typeof msg.url === "string") {
