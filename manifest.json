@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Search sidebar",
-  "version": "1.0.11",
+  "version": "1.0.10",
   "description": "Companion sidebar that opens on Google search result pages.",
   "browser_specific_settings": {
     "gecko": {

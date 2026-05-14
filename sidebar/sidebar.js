@@ -1102,10 +1102,6 @@ async function renderHistoryRelated() {
   const section = historyListEl.closest(".sc-section");
   const moreBtn = section && section.querySelector(".sc-show-more");
 
-  // Generation counter: any newer call to renderHistoryRelated will increment
-  // this, causing the check below to discard this (now stale) render.
-  const myGen = ++historyRelatedRenderGen;
-
   // Build context from currentPageContext — either a bare query string (SERP)
   // or an object with title/text (page).
   const ctx = typeof currentPageContext === "object" && currentPageContext
@@ -1210,8 +1206,8 @@ async function renderHistoryRelated() {
     _sclog("related-history fetch failed:", String(e && e.message || e));
   }
 
-  // Bail if the page changed or the tab was switched away while fetching.
-  if (!isHistoryRelatedTabActive() || historyRelatedRenderGen !== myGen) return;
+  // Bail quietly if the tab was switched away while the fetch was in flight.
+  if (!isHistoryRelatedTabActive()) return;
 
   // Don't show the current search as a "past" search — it's stored in the
   // cache for future pages but shouldn't appear in the list right now.
@@ -1317,12 +1313,6 @@ async function renderFirefoxRelated() {
   const section = relatedListEl && relatedListEl.closest(".sc-section");
   if (!section) return;
 
-  // Generation counter: any newer call to renderFirefoxRelated will increment
-  // this, causing the check below to discard this (now stale) render. Without
-  // this, an in-flight AI call from the previous page can resolve after the
-  // new page's call and overwrite the panel with leaving-page content.
-  const myGen = ++firefoxRelatedRenderGen;
-
   if (!(await hasConsented())) {
     showConsentPopup("firefox");
     return;
@@ -1416,7 +1406,7 @@ async function renderFirefoxRelated() {
     _sclog("firefox-related fetch failed:", String(err));
   }
 
-  if (!isFirefoxRelatedTabActive() || firefoxRelatedRenderGen !== myGen) return;
+  if (!isFirefoxRelatedTabActive()) return;
 
   const listEl = document.getElementById("firefoxList");
   if (listEl) listEl.hidden = true;
@@ -1736,8 +1726,6 @@ function aiSuggestEnabled() {
 // the user toggles the page-suggestions setting off.
 let currentSuggKind = "";
 let currentSuggSourceKey = "";
-let historyRelatedRenderGen = 0;
-let firefoxRelatedRenderGen = 0;
 
 // The active page/query context — plain text used by the history "Related"
 // tab to score history entries by keyword overlap.
@@ -2410,40 +2398,16 @@ browser.runtime.onMessage.addListener((msg) => {
     return;
   }
   if (msg && msg.type === "page-context" && typeof msg.url === "string") {
-    // msg.tabId is present only when the message comes from background.js after
-    // tabs.onUpdated (authoritative). SPA messages sent directly from the content
-    // script have no tabId (speculative — title may belong to the leaving page).
-    const isAuthoritative = !!msg.tabId;
-    _sclog("← page-context msg", { url: msg.url.slice(0, 80), title: (msg.title || "").slice(0, 60), textLen: (msg.text || "").length, source: isAuthoritative ? "tabs" : "spa" });
-
-    const isPageDuplicate = currentSuggKind === "page" && currentSuggSourceKey === msg.url;
-    if (isPageDuplicate) {
-      if (!isAuthoritative) {
-        // SPA sent the same URL we're already showing — drop entirely.
-        _sclog("[page-context] SPA duplicate dropped");
-        return;
-      }
-      // Background sent the same URL (tabs.onUpdated fired after SPA already set
-      // the URL). If the title changed the SPA fired with the leaving page's title;
-      // correct all three panels now that we have the real title.
-      const storedTitle = (currentPageContext && typeof currentPageContext === "object" && currentPageContext.title) || "";
-      const newTitle = (msg.title || "").trim();
-      if (!newTitle || newTitle === storedTitle) return;
-      _sclog("[page-context] authoritative title correction", { was: storedTitle.slice(0, 50), now: newTitle.slice(0, 50) });
-      // Clear the stale suggestions cache so loadPageSuggestions re-fetches with the correct title.
-      if (window.SC_AI && SC_AI.pageSuggestionsCache) {
-        SC_AI.pageSuggestionsCache.delete((msg.url || "").split("#")[0].toLowerCase());
-      }
-      currentPageContext = { title: msg.title || "", text: msg.text || "", url: msg.url || "" };
-      refreshHistoryRelatedIfActive();
-      refreshFirefoxRelatedIfActive();
-      loadPageSuggestions(msg.url, msg.title || "", msg.text || "");
-      if (msg.title) recordPageVisit(msg.url, msg.title, msg.text || "").catch(() => {});
-      return;
-    }
-
-    // New URL — page-derived suggestions don't fill the search input.
-    setSuggestionsActive({ kind: "page", url: msg.url, title: msg.title || "", text: msg.text || "" });
+    _sclog("← page-context msg", { url: msg.url.slice(0, 80), title: (msg.title || "").slice(0, 60), textLen: (msg.text || "").length });
+    // Page-derived suggestions don't fill the search input — the input is
+    // for queries the user types, not for current-URL state.
+    setSuggestionsActive({
+      kind: "page",
+      url: msg.url,
+      title: msg.title || "",
+      text: msg.text || "",
+    });
+    // Record the visit for the Firefox Related tab (post-consent, fire-and-forget).
     if (msg.title) recordPageVisit(msg.url, msg.title, msg.text || "").catch(() => {});
     return;
   }
