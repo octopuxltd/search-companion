@@ -1870,18 +1870,7 @@ function setSuggestionsActive(input) {
   if (input && typeof input === "object" && input.kind === "page" && input.url) {
     suggestionsSection.hidden = false;
     setBlockedMessage(false);
-    if (currentSuggKind === "page" && currentSuggSourceKey === input.url) {
-      // Duplicate URL — but if the title changed (e.g. tabs.onUpdated arriving
-      // after an SPA intercept that fired with a placeholder/wrong title), update
-      // the context and re-trigger the related panels without re-running suggestions.
-      const storedTitle = (currentPageContext && currentPageContext.title) || "";
-      const newTitle = (input.title || "").trim();
-      if (!newTitle || newTitle === storedTitle) return;
-      currentPageContext = { title: input.title || "", text: input.text || "", url: input.url || "" };
-      refreshHistoryRelatedIfActive();
-      refreshFirefoxRelatedIfActive();
-      return;
-    }
+    if (currentSuggKind === "page" && currentSuggSourceKey === input.url) return;
     currentSuggKind = "page";
     currentSuggSourceKey = input.url;
     currentPageContext = { title: input.title || "", text: input.text || "", url: input.url || "" };
