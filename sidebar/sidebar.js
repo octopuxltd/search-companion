@@ -1102,6 +1102,10 @@ async function renderHistoryRelated() {
   const section = historyListEl.closest(".sc-section");
   const moreBtn = section && section.querySelector(".sc-show-more");
 
+  // Generation counter: any newer call to renderHistoryRelated will increment
+  // this, causing the check below to discard this (now stale) render.
+  const myGen = ++historyRelatedRenderGen;
+
   // Build context from currentPageContext — either a bare query string (SERP)
   // or an object with title/text (page).
   const ctx = typeof currentPageContext === "object" && currentPageContext
@@ -1206,8 +1210,8 @@ async function renderHistoryRelated() {
     _sclog("related-history fetch failed:", String(e && e.message || e));
   }
 
-  // Bail quietly if the tab was switched away while the fetch was in flight.
-  if (!isHistoryRelatedTabActive()) return;
+  // Bail if the page changed or the tab was switched away while fetching.
+  if (!isHistoryRelatedTabActive() || historyRelatedRenderGen !== myGen) return;
 
   // Don't show the current search as a "past" search — it's stored in the
   // cache for future pages but shouldn't appear in the list right now.
@@ -1726,6 +1730,7 @@ function aiSuggestEnabled() {
 // the user toggles the page-suggestions setting off.
 let currentSuggKind = "";
 let currentSuggSourceKey = "";
+let historyRelatedRenderGen = 0;
 
 // The active page/query context — plain text used by the history "Related"
 // tab to score history entries by keyword overlap.
@@ -1865,7 +1870,18 @@ function setSuggestionsActive(input) {
   if (input && typeof input === "object" && input.kind === "page" && input.url) {
     suggestionsSection.hidden = false;
     setBlockedMessage(false);
-    if (currentSuggKind === "page" && currentSuggSourceKey === input.url) return;
+    if (currentSuggKind === "page" && currentSuggSourceKey === input.url) {
+      // Duplicate URL — but if the title changed (e.g. tabs.onUpdated arriving
+      // after an SPA intercept that fired with a placeholder/wrong title), update
+      // the context and re-trigger the related panels without re-running suggestions.
+      const storedTitle = (currentPageContext && currentPageContext.title) || "";
+      const newTitle = (input.title || "").trim();
+      if (!newTitle || newTitle === storedTitle) return;
+      currentPageContext = { title: input.title || "", text: input.text || "", url: input.url || "" };
+      refreshHistoryRelatedIfActive();
+      refreshFirefoxRelatedIfActive();
+      return;
+    }
     currentSuggKind = "page";
     currentSuggSourceKey = input.url;
     currentPageContext = { title: input.title || "", text: input.text || "", url: input.url || "" };
