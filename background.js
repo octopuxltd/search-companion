@@ -199,9 +199,56 @@ if (browser.theme && browser.theme.onUpdated) {
 }
 applyThemedIcons();
 
+// True for ordinary http/https pages the content script can run on. Excludes
+// about:, moz-extension:, file:, ftp:, view-source: — none of which produce
+// useful "page topic" suggestions.
+function isContentPage(url) {
+  return typeof url === "string" && /^https?:\/\//i.test(url);
+}
+
+// Mirror the user's manually-blocked domain list from storage.local into the
+// in-memory list that isBlockedForAI() reads. Runs on startup and on every
+// change so toggles in Settings take effect immediately for the next nav.
+async function refreshUserBlockedDomains() {
+  try {
+    const data = await browser.storage.local.get("userBlockedDomains");
+    setUserBlockedDomains(Array.isArray(data.userBlockedDomains) ? data.userBlockedDomains : []);
+  } catch (e) { /* storage unavailable */ }
+}
+refreshUserBlockedDomains();
+if (browser.storage && browser.storage.onChanged) {
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.userBlockedDomains) refreshUserBlockedDomains();
+  });
+}
+
+async function pageSuggestionsEnabled() {
+  try {
+    const data = await browser.storage.local.get("settingPageSuggestions");
+    return data.settingPageSuggestions === true;
+  } catch (e) { return false; }
+}
+
+// TEMP — diagnostic logging for the page-suggestions flow. One line each
+// with a wall-clock timestamp so it's copy-pasteable. Remove once the
+// flow is confirmed working end-to-end.
+function _ts() {
+  const d = new Date();
+  const p = (n, w = 2) => String(n).padStart(w, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+}
+function _bglog() {
+  const args = Array.from(arguments).map((a) =>
+    typeof a === "string" ? a : JSON.stringify(a).slice(0, 200)
+  ).join(" ");
+  console.log(`[${_ts()}] [bg] ${args}`);
+}
+
 async function handleTab(tabId, url) {
+  _bglog("handleTab tabId=" + tabId + " url=" + (url || "").slice(0, 120));
   const serp = detectSerp(url);
   if (serp) {
+    _bglog("→ SERP detected", { engine: serp.engineId, q: serp.query });
     try {
       await browser.sidebarAction.open();
     } catch (e) {
@@ -216,21 +263,142 @@ async function handleTab(tabId, url) {
     }
     return;
   }
-  // Active tab is not a SERP — tell the sidebar to clear its suggestions
-  // section so we don't leave stale "other searches" hanging around.
+
+  const isCP = isContentPage(url);
+  const blockedReason = isBlockedForAI(url);
+  const enabled = await pageSuggestionsEnabled();
+  _bglog("non-SERP checks", { isContentPage: isCP, blocked: blockedReason || null, settingOn: enabled });
+
+  // Blocked content page with the setting on: surface a "URL blocked for
+  // privacy" placeholder rather than silently hiding. Only do this when
+  // the user opted in to page analysis — otherwise the section just stays
+  // hidden as before.
+  if (isCP && enabled && blockedReason) {
+    _bglog("→ blocked page; sending blocked-context");
+    try {
+      await browser.runtime.sendMessage({ type: "blocked-context", url, tabId, reason: blockedReason });
+    } catch (e) { /* sidebar not open */ }
+    return;
+  }
+
+  // Not a SERP. If page-suggestions is enabled in settings AND this is a
+  // content page the content script can introspect AND it isn't on the
+  // blocked list (auth flows, admin dashboards, mail, billing, etc.),
+  // ask the content script for an extract and forward to the sidebar.
+  // Otherwise tell the sidebar to clear the suggestions section.
+  if (isCP && !blockedReason && enabled) {
+    _bglog("→ requesting page context from content script");
+    try {
+      const ctx = await browser.tabs.sendMessage(tabId, { type: "extract-page-context" });
+      _bglog("← got context", { title: (ctx && ctx.title || "").slice(0, 80), textLen: (ctx && ctx.text || "").length, urlOk: !!(ctx && ctx.url) });
+      if (ctx && (ctx.title || ctx.text)) {
+        try {
+          await browser.runtime.sendMessage({
+            type: "page-context",
+            url: ctx.url || url,
+            tabId,
+            title: ctx.title || "",
+            text: ctx.text || "",
+          });
+          _bglog("→ forwarded page-context to sidebar");
+        } catch (e) { _bglog("page-context message failed:", String(e && e.message || e)); }
+        return;
+      } else {
+        _bglog("context empty, falling through");
+      }
+    } catch (e) {
+      _bglog("tabs.sendMessage threw:", String(e && e.message || e), "— retrying in 600ms");
+      // "complete" fired but content script not registered yet (common on first
+      // navigation to a page). Wait and retry once before giving up.
+      await new Promise((r) => setTimeout(r, 600));
+      try {
+        const ctx2 = await browser.tabs.sendMessage(tabId, { type: "extract-page-context" });
+        _bglog("← retry got context", { title: (ctx2 && ctx2.title || "").slice(0, 80), textLen: (ctx2 && ctx2.text || "").length });
+        if (ctx2 && (ctx2.title || ctx2.text)) {
+          try {
+            await browser.runtime.sendMessage({ type: "page-context", url: ctx2.url || url, tabId, title: ctx2.title || "", text: ctx2.text || "" });
+            _bglog("→ forwarded page-context to sidebar (retry)");
+          } catch (e2) { _bglog("retry page-context forward failed:", String(e2 && e2.message || e2)); }
+          return;
+        }
+      } catch (e2) {
+        _bglog("retry also threw:", String(e2 && e2.message || e2));
+      }
+      // Both attempts failed — fall through to the "no context" path.
+    }
+  } else {
+    _bglog("→ skipping page extraction (gate failed)");
+  }
+
+  // Default: clear the suggestions section.
+  _bglog("→ sending empty search-context (clear)");
   try {
     await browser.runtime.sendMessage({ type: "search-context", query: "", url: url || "", tabId });
   } catch (e) { /* sidebar not open */ }
 }
 
+// Per-tab base-URL cache (fragment stripped). Used to detect hash-only
+// navigations so we don't re-render suggestions when only the anchor changes.
+const tabBaseUrls = new Map();
+
+function baseUrl(url) {
+  return typeof url === "string" ? url.split("#")[0] : "";
+}
+
+browser.tabs.onRemoved.addListener((tabId) => tabBaseUrls.delete(tabId));
+
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === "complete" || changeInfo.url) {
-    handleTab(tabId, changeInfo.url || tab.url);
+  const evtSummary = {};
+  if (changeInfo.url) evtSummary.url = changeInfo.url.slice(0, 100);
+  if (changeInfo.status) evtSummary.status = changeInfo.status;
+  _bglog("[onUpdated] tabId=" + tabId, evtSummary);
+
+  if (changeInfo.status === "complete") {
+    // Page fully loaded — content script is injected. Always handle this so
+    // page-context extraction runs when the content script is actually ready,
+    // even on fast/cached loads where url+complete arrive in the same event.
+    const newBase = baseUrl(tab.url);
+    const prevBase = tabBaseUrls.get(tabId);
+    if (newBase && newBase === prevBase) {
+      _bglog("[onUpdated] → complete but hash-only → skipped");
+      return;
+    }
+    tabBaseUrls.set(tabId, newBase);
+    _bglog("[onUpdated] → complete → handleTab", { tabUrl: (tab.url || "").slice(0, 100) });
+    handleTab(tabId, tab.url);
+    return;
+  }
+  if (changeInfo.url) {
+    // Early URL change before the page loads. Content script isn't injected
+    // yet, so skip page extraction. Only handle SERPs here so the sidebar
+    // input updates immediately without waiting for the page to finish loading.
+    //
+    // Don't update tabBaseUrls here. Hash-only navigations fire changeInfo.url
+    // but never fire status=complete, so the cache stays at the last fully-
+    // loaded URL. Real navigations fire changeInfo.url then status=complete;
+    // the complete handler does the cache update and the duplicate-skip check.
+    const newBase = baseUrl(changeInfo.url);
+    const prevBase = tabBaseUrls.get(tabId);
+    if (newBase && newBase === prevBase) {
+      _bglog("[onUpdated] → url+hash-only → skipped");
+      return;
+    }
+    if (detectSerp(changeInfo.url)) {
+      _bglog("[onUpdated] → url+SERP → handleTab");
+      handleTab(tabId, changeInfo.url);
+    } else {
+      _bglog("[onUpdated] → url+non-SERP → skipped (waiting for complete)");
+    }
   }
 });
 
 browser.tabs.onActivated.addListener(async ({ tabId }) => {
   const tab = await browser.tabs.get(tabId);
+  // about:blank is a transient placeholder when a new tab opens and is about
+  // to navigate. Skip it — onUpdated will fire with the real URL shortly after.
+  // Without this, opening a link in a new tab causes a flash to frozen-SERP
+  // suggestions before the real page-context arrives.
+  if (!tab.url || tab.url === "about:blank") return;
   handleTab(tabId, tab.url);
 });
 
@@ -248,6 +416,27 @@ browser.runtime.onMessage.addListener(async (msg) => {
     const serp = tab && detectSerp(tab.url);
     if (serp) {
       return { query: serp.query, engineId: serp.engineId, url: tab.url };
+    }
+    // Non-SERP: if page-suggestions is on AND this is a content page, hand
+    // back either the page context (for analysable pages) or a blocked
+    // marker (for pages on the block list). Sidebar uses the marker to
+    // render its "URL blocked for privacy" placeholder.
+    if (tab && isContentPage(tab.url) && (await pageSuggestionsEnabled())) {
+      const blockedReason = isBlockedForAI(tab.url);
+      if (blockedReason) {
+        return { kind: "blocked", url: tab.url, reason: blockedReason };
+      }
+      try {
+        const ctx = await browser.tabs.sendMessage(tab.id, { type: "extract-page-context" });
+        if (ctx && (ctx.title || ctx.text)) {
+          return {
+            kind: "page",
+            url: ctx.url || tab.url,
+            title: ctx.title || "",
+            text: ctx.text || "",
+          };
+        }
+      } catch (e) { /* content script not ready */ }
     }
     return { query: "", url: tab ? tab.url : "" };
   }

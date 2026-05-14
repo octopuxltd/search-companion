@@ -50,6 +50,12 @@ html, body {
   color: var(--fg);
   font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 }
+[hidden] { display: none !important; }
+
+body:not(.sc-content-ready) .sc-stickyhead,
+body:not(.sc-content-ready) .sc-content {
+  visibility: hidden;
+}
 
 .sc-stickyhead {
   position: sticky;
@@ -387,6 +393,31 @@ html, body {
 }
 .sc-slow-msg.is-visible { opacity: 1; }
 .sc-slow-msg[hidden] { display: none; }
+.sc-browse-consent {
+  pointer-events: auto;
+  max-width: 200px;
+  gap: 3px;
+  text-align: center;
+  position: relative;
+}
+.sc-slow-msg.sc-browse-consent { position: absolute; }
+.sc-browse-consent-close {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  appearance: none; -webkit-appearance: none;
+  background: none; border: none; padding: 0;
+  font-size: 10px;
+  color: var(--muted);
+  cursor: default;
+  line-height: 1;
+}
+.sc-browse-consent-close:hover { color: var(--fg); }
+.sc-browse-consent span {
+  width: 100%;
+  text-align: center;
+}
+
 
 /* Heading band — sticky under the global header. The inset top line gives every
    heading a 1px divider above it (including the first one in a panel) so the
@@ -407,6 +438,64 @@ html, body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.sc-suggestions-mode {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M1 2.5l3 3 3-3' fill='none' stroke='%23999' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 2px center;
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border-radius: 3px;
+  padding: 1px 14px 1px 5px;
+  cursor: default;
+  white-space: nowrap;
+}
+.sc-suggestions-mode:focus { outline: none; }
+.sc-suggestions-mode:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Sections with classic in-heading tab controls (Related / Latest etc.).
+   h2 aligns items to the bottom so tabs sit flush at the heading's lower
+   edge. A bottom border on the h2 acts as the "tab bar line" that the
+   active tab breaks through. */
+.sc-section--tabbed h2 {
+  align-items: center;
+  padding-bottom: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+}
+.sc-section--tabbed h2 > span:first-child {
+  margin-top: -5px;
+}
+.sc-section-tabs {
+  display: inline-flex;
+  align-self: flex-end;
+  gap: 2px;
+  line-height: 1;
+}
+.sc-section-tab {
+  flex: 0 0 auto;
+  padding: 4px 9px 5px;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--heading-bg);
+  border: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+.sc-section-tab.is-active {
+  background: var(--bg);
+  color: var(--fg);
+  border-bottom-color: var(--bg);
+}
+.sc-section-tab:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .sc-h2-action {
@@ -501,6 +590,20 @@ html, body {
           mask: url("data:image/svg+xml;utf8,%3Csvg%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2032%2032%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M13.0638%200.460632H13.0679V0.462443C16.6369%200.463477%2019.8686%201.9111%2022.2073%204.25025C24.542%206.58605%2025.9884%209.81494%2025.9907%2013.3811H25.9925V13.3896V13.4H25.9907C25.9894%2014.8372%2025.7535%2016.2205%2025.3198%2017.5103C25.2471%2017.7268%2025.171%2017.9347%2025.0929%2018.1334V18.1352C24.7189%2019.0818%2024.2355%2019.9767%2023.6582%2020.801L31.1801%2027.5617L31.1847%2027.5658L31.2253%2027.6036L31.2282%2027.6064C31.6529%2028.0107%2031.8841%2028.552%2031.9133%2029.1013C31.9418%2029.6445%2031.7729%2030.2001%2031.4015%2030.6457L31.3986%2030.6498L31.3534%2030.7023L31.3443%2030.7114L31.3066%2030.7528L31.3024%2030.7582C30.8976%2031.1829%2030.3573%2031.4136%2029.8075%2031.4426C29.2651%2031.4713%2028.709%2031.3029%2028.2631%2030.931L28.2592%2030.9281L28.2065%2030.8829L28.199%2030.8767L20.5057%2023.9621C20.2781%2024.1225%2020.0458%2024.2748%2019.8107%2024.4186C19.4918%2024.6139%2019.1615%2024.7978%2018.8245%2024.9657C17.0918%2025.83%2015.1339%2026.3163%2013.064%2026.3163V26.3181H13.0599V26.3163C9.49088%2026.3153%206.25863%2024.8676%203.91999%2022.5285C1.58445%2020.1927%200.138904%2016.9633%200.136576%2013.3982H0.134766V13.3896V13.3855H0.136576C0.137611%209.81649%201.58523%206.58424%203.92439%204.2456C6.26018%201.9111%209.48907%200.464771%2013.0552%200.462443V0.460632H13.0638ZM13.0679%203.36001V3.36182H13.0638H13.0552V3.36001C10.2914%203.36182%207.78617%204.4851%205.97257%206.29792C4.15923%208.11074%203.03492%2010.6185%203.03414%2013.3857H3.03595V13.3899V13.3984H3.03414C3.03595%2016.1623%204.15846%2018.6662%205.97206%2020.4803C7.78488%2022.2939%2010.2927%2023.4182%2013.0596%2023.4187V23.4169H13.0638H13.0723V23.4187C15.8361%2023.4169%2018.3403%2022.2942%2020.1544%2020.4808C21.9678%2018.668%2023.0921%2016.161%2023.0926%2013.394H23.091V13.3899V13.3814H23.0926C23.091%2010.6175%2021.9675%208.1123%2020.1549%206.2987C18.3421%204.4851%2015.8351%203.36078%2013.0679%203.36001Z%22%20fill%3D%22black%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
 }
 
+/* Clock icon for all items in the Firefox Related list — overrides the
+   magnifying-glass rule on fake items (data-q) and adds an icon to real
+   items (href-only). Higher specificity (ID + element) beats the class rule. */
+#firefoxRelatedList a::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  color: var(--muted);
+  -webkit-mask: url("data:image/svg+xml;utf8,%3Csvg%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2032%2032%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2213%22%20stroke%3D%22black%22%20stroke-width%3D%222.5%22%2F%3E%3Cpath%20d%3D%22M16%208v8l5%203%22%20stroke%3D%22black%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml;utf8,%3Csvg%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2032%2032%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2213%22%20stroke%3D%22black%22%20stroke-width%3D%222.5%22%2F%3E%3Cpath%20d%3D%22M16%208v8l5%203%22%20stroke%3D%22black%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
+}
+
 .sc-list a > span:not(.sc-meta):first-of-type,
 .sc-list a > .sc-title { flex: 1; min-width: 0; }
 
@@ -556,6 +659,21 @@ html, body {
 .sc-show-more:hover { background: var(--hover); }
 .sc-show-more:focus { outline: none; }
 .sc-show-more:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sc-show-more:disabled { color: var(--muted); opacity: 0.5; pointer-events: none; }
+
+/* Footer row at the bottom of "Suggested next searches": Show more on the
+   left (when applicable), the AI on/off toggle on the right. Toggle keeps
+   its slot even when Show more is hidden so it doesn't shift. */
+.sc-suggestions-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sc-suggestions-footer .sc-show-more {
+  margin-top: 0;
+}
+
 
 .sc-row-menu {
   position: absolute;
@@ -710,6 +828,175 @@ html, body {
   color: var(--fg);
 }
 .sc-settings-list li { margin: 2px 0; }
+
+/* Page-level heading at the top of the Settings tab. Overrides the
+   project's default `.sc-section h2` sticky-band styling because this
+   heading isn't a sticky section divider — it's the page title. */
+#tab-settings .sc-settings-page-title {
+  position: static;
+  margin: 0 0 16px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+  display: block;
+}
+
+/* Section heading above the AI-suggestion cards — sets up "Use AI to
+   generate content based on…" before the two checkbox cards. */
+.sc-settings-section-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+/* Settings is broken into three cards, one per user-changeable setting.
+   Version info sits outside the cards, pushed to the bottom of the tab. */
+.sc-settings-card {
+  margin: 0 0 12px;
+  padding: 14px 14px;
+  background: var(--btn-bg);
+  border-radius: 10px;
+}
+.sc-settings-card .sc-settings-help:last-child { margin-bottom: 0; }
+.sc-settings-card .sc-settings-domain-list:last-child { margin-bottom: 0; }
+.sc-settings-card .sc-settings-list:last-child { margin-bottom: 0; }
+
+/* Nested "Block these sites" container inside the page-browse card. Faint
+   outline only, no fill. Indented to line up with the label text of the
+   checkbox above (checkbox 13px + flex gap 10px = 23px). */
+.sc-settings-subcard {
+  margin: 12px 0 0 23px;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.22);
+  border-radius: 8px;
+}
+.sc-settings-subcard > :last-child { margin-bottom: 0; }
+@media (prefers-color-scheme: dark) {
+  .sc-settings-subcard { border-color: rgba(255, 255, 255, 0.22); }
+}
+
+/* Helper text and any inline list that follows a checkbox row should align
+   with the row's label, not the card's content edge — so they sit visually
+   under the label rather than under the checkbox. Width = checkbox (13px)
+   + flex gap (10px) = 23px. */
+.sc-settings-row ~ .sc-settings-help { padding-left: 23px; }
+.sc-settings-row + .sc-settings-help + .sc-settings-list { margin-left: 23px; }
+
+/* Pin the version line to the bottom of the tab's viewport area when the
+   content is shorter than the available space; otherwise it sits below
+   the last card with some breathing room. Right-aligned to read as a
+   quiet footer. The :not([hidden]) gate is essential — without it the
+   explicit `display: flex` on the ID would override the UA's
+   `[hidden] { display: none }` and the Settings panel would render on
+   every tab. */
+#tab-settings:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - var(--sticky-header, 86px));
+}
+#tab-settings:not([hidden]) .sc-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+}
+#tab-settings .sc-version {
+  margin: 16px 4px 0 4px;
+  margin-top: auto;
+  text-align: right;
+}
+.sc-settings-reset-btn {
+  appearance: none; -webkit-appearance: none;
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: default;
+}
+.sc-settings-reset-btn:hover { color: var(--fg); }
+.sc-settings-reset-btn:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+.sc-settings-help:has(.sc-settings-reset-btn) { text-align: right; }
+
+/* Manage-blocked-domains block on the Settings tab. */
+.sc-settings-block { margin-top: 18px; }
+.sc-settings-label {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+}
+.sc-settings-domain-add {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 8px;
+}
+.sc-settings-domain-add input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+}
+.sc-settings-domain-add input[type="text"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.sc-settings-domain-add .sc-btn-secondary {
+  padding: 6px 14px;
+  font-size: 13px;
+  /* Stronger border than the default secondary button — sits inside the
+     faint blocked-sites subcard and would disappear otherwise. */
+  border-color: color-mix(in srgb, var(--fg) 35%, transparent);
+}
+.sc-settings-domain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sc-settings-domain-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 10px;
+  margin: 2px 0;
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--btn-bg);
+  border-radius: 6px;
+}
+.sc-settings-domain-list li .host { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sc-settings-domain-list li button {
+  flex: none;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--muted);
+}
+.sc-settings-domain-list li button:hover { color: var(--accent); background: rgba(0,0,0,0.05); }
+@media (prefers-color-scheme: dark) {
+  .sc-settings-domain-list li button:hover { background: rgba(255,255,255,0.08); }
+}
+.sc-settings-domain-list li button:focus { outline: none; }
+.sc-settings-domain-list li button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* Pages without a heading band (Advanced, Settings) — match the inner content
    padding the other sections get from their h2 band. */
@@ -897,6 +1184,18 @@ html, body {
   100% { background-position: -200% 0; }
 }
 
+/* Static skeleton — no shimmer, flat tone. Used when the section is in a
+   non-loading "placeholder" state (e.g. URL blocked from analysis). */
+.sc-skel-line.is-static {
+  animation: none;
+  background: rgba(0, 0, 0, 0.08);
+}
+@media (prefers-color-scheme: dark) {
+  .sc-skel-line.is-static {
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
 /* Skeleton row for "Other searches to try" while AI is generating.
    Re-uses the same magnifying-glass icon as a real suggestion (via the
    a[data-q]::before rule above) and shows a shimmering bar where the text
@@ -916,6 +1215,12 @@ html, body {
 .sc-list li.sc-skel-row:hover::after,
 .sc-list li.sc-skel-row:focus-within::after { content: none; }
 .sc-list li.sc-skel-row > a { color: var(--fg); }
+.sc-list li.sc-history-empty {
+  padding: 4px 10px;
+  color: var(--muted);
+  font-size: 11px;
+  pointer-events: none;
+}
 .sc-list li.sc-skel-row .sc-skel-line {
   flex: 1;
   /* Match the real text line height so a skeleton row is the same total
@@ -937,6 +1242,13 @@ html, body {
 .sc-list li.sc-reveal.sc-reveal-on {
   opacity: 1;
 }
+.sc-list li.sc-removing {
+  opacity: 0;
+  height: 0 !important;
+  margin-top: 0 !important;
+  pointer-events: none;
+  transition: opacity 150ms ease, height 200ms ease 50ms, margin-top 200ms ease 50ms;
+}
 
 /* First-run privacy disclaimer overlay. Must be dismissed with Agree before
    the sidebar is usable. Plain white card with content anchored at the top. */
@@ -952,25 +1264,34 @@ html, body {
   color: var(--fg);
 }
 .sc-disclaimer[hidden] { display: none; }
+@keyframes sc-disclaimer-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 .sc-disclaimer-card {
   max-width: 360px;
   text-align: center;
+  animation: sc-disclaimer-in 350ms ease both;
 }
 .sc-disclaimer-card h2 {
   margin: 0 0 12px;
   font-size: 17px;
   font-weight: 600;
   color: var(--fg);
+  text-align: center;
 }
 .sc-disclaimer-card p {
-  margin: 0 0 22px;
+  margin: 0 0 14px;
   font-size: 13px;
   line-height: 1.55;
   color: var(--fg);
+  text-align: center;
 }
+
 .sc-disclaimer-agree {
   appearance: none;
   -webkit-appearance: none;
+  margin-top: 8px;
   padding: 9px 26px;
   font: inherit;
   font-size: 14px;
@@ -979,14 +1300,47 @@ html, body {
   background: var(--accent);
   border: none;
   border-radius: 999px;
-  cursor: pointer;
+  cursor: default;
 }
 .sc-disclaimer-agree:hover { filter: brightness(1.05); }
 .sc-disclaimer-agree:focus { outline: none; }
 .sc-disclaimer-agree:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sc-browse-consent-agree {
+  height: 24px;
+  padding: 0 12px 2px;
+  font-size: 11px;
+  font-weight: 500;
+}
 
 /* Tooltip shown after "Refine this search" — points up at the submit button
    so the user knows to edit the term then click the arrow. */
+.sc-ff-tooltip {
+  position: fixed;
+  z-index: 50;
+  padding: 7px 10px;
+  background: var(--fg);
+  color: var(--bg);
+  border-radius: 5px;
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 320px;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  word-break: break-all;
+}
+
+.sc-ff-tooltip-title {
+  display: block;
+  font-weight: 500;
+}
+
+.sc-ff-tooltip-url {
+  display: block;
+  margin-top: 3px;
+  opacity: 0.65;
+  font-size: 11px;
+}
+
 .sc-refine-tip {
   position: fixed;
   z-index: 40;
@@ -1280,11 +1634,27 @@ body.is-settings .sc-search { display: none; }
   </header>
 
   <div class="sc-content" id="tab-current" role="tabpanel" aria-labelledby="tabbtn-current">
-    <section class="sc-section" id="suggestionsSection" aria-label="People also search for" hidden>
-      <h2>People also search for</h2>
+    <section class="sc-section" id="suggestionsSection" aria-label="Suggested next searches" hidden>
+      <h2>
+        <span>Suggested next searches</span>
+        <select class="sc-suggestions-mode" id="suggestionsMode" aria-label="Suggestion mode">
+          <option value="search">While searching</option>
+          <option value="browse">Searching &amp; browsing</option>
+        </select>
+      </h2>
       <div class="sc-slow-msg" id="suggestionsSlowMsg" aria-hidden="true">
         <span>Slow because</span>
         <span>prototype</span>
+      </div>
+      <div class="sc-slow-msg sc-browse-consent" id="browseConsentPopup" hidden>
+        <button type="button" class="sc-browse-consent-close" id="browseConsentCloseBtn" aria-label="Dismiss">✕</button>
+        <span>Pages you visit with the sidebar open will be analysed by AI to provide relevant suggestions.</span>
+        <button type="button" class="sc-disclaimer-agree sc-browse-consent-agree" id="browseConsentAgreeBtn">Agree</button>
+      </div>
+      <div class="sc-slow-msg" id="suggestionsBlockedMsg" aria-hidden="true">
+        <span>For privacy reasons</span>
+        <span>suggestion generation</span>
+        <span>is blocked on this site</span>
       </div>
       <ul class="sc-list" id="suggestionsList">
         <li><a href="#" data-q="best wireless headphones under £200">best wireless headphones under £200</a></li>
@@ -1304,11 +1674,19 @@ body.is-settings .sc-search { display: none; }
           <li><a href="#" data-q="how to fix sticky headphone pads">how to fix sticky headphone pads</a></li>
         </ul>
       </div>
-      <button type="button" class="sc-show-more" aria-expanded="false">Show more</button>
+      <div class="sc-suggestions-footer">
+        <button type="button" class="sc-show-more" aria-expanded="false">Show more</button>
+      </div>
     </section>
 
-    <section class="sc-section" aria-label="Search history">
-      <h2>Search history</h2>
+    <section class="sc-section sc-section--tabbed" aria-label="From your search history">
+      <h2>
+        <span>From your search history</span>
+        <span class="sc-section-tabs" role="tablist" aria-label="History view">
+          <button class="sc-section-tab" role="tab" aria-selected="false">Related</button>
+          <button class="sc-section-tab is-active" role="tab" aria-selected="true">Latest</button>
+        </span>
+      </h2>
       <ul class="sc-list" id="historyList">
         <li><a href="#" data-q="best noise cancelling headphones 2026"><span class="sc-title">best noise cancelling headphones 2026</span><span class="sc-meta">2 hours ago</span></a></li>
         <li><a href="#" data-q="sony wh-1000xm6 review"><span class="sc-title">sony wh-1000xm6 review</span><span class="sc-meta">Yesterday</span></a></li>
@@ -1330,8 +1708,15 @@ body.is-settings .sc-search { display: none; }
       <button type="button" class="sc-show-more" aria-expanded="false">Show more</button>
     </section>
 
-    <section class="sc-section" aria-label="From Firefox">
-      <h2>From Firefox</h2>
+    <section class="sc-section sc-section--tabbed" aria-label="From Firefox">
+      <h2>
+        <span>From Firefox</span>
+        <span class="sc-section-tabs" role="tablist" aria-label="Firefox view">
+          <button class="sc-section-tab" role="tab" aria-selected="false">Related</button>
+          <button class="sc-section-tab is-active" role="tab" aria-selected="true">Latest</button>
+        </span>
+      </h2>
+      <ul class="sc-list" id="firefoxRelatedList" hidden></ul>
       <ul class="sc-list" id="firefoxList">
         <li><a href="https://www.rtings.com/headphones/reviews/sony/wh-1000xm6-wireless"><span class="sc-title">Sony WH-1000XM6 Wireless Review</span><span class="sc-meta">rtings.com · Bookmark</span></a></li>
         <li><a href="https://www.theverge.com/24179999/best-noise-cancelling-headphones"><span class="sc-title">The best noise-cancelling headphones to buy</span><span class="sc-meta">theverge.com · Recently visited</span></a></li>
@@ -1369,7 +1754,7 @@ body.is-settings .sc-search { display: none; }
     </div>
 
     <section class="sc-section">
-      <h2>People also search for</h2>
+      <h2>Suggested next searches</h2>
       <div class="sc-slow-msg" id="digSimilarSlowMsg" aria-hidden="true">
         <span>Slow because</span>
         <span>prototype</span>
@@ -1550,15 +1935,37 @@ body.is-settings .sc-search { display: none; }
 
   <div class="sc-content" id="tab-settings" role="tabpanel" aria-labelledby="tabbtn-settings" hidden>
     <section class="sc-section sc-section-plain" aria-label="Settings">
-      <p class="sc-version">Search Sidebar version <span id="settingsVersion">—</span></p>
-      <label class="sc-settings-row">
-        <input type="checkbox" id="settingAiSuggest" checked />
-        <span>Simulate suggestions with AI (slow)</span>
-      </label>
-      <p class="sc-settings-help">If you turn this off, suggestions are instant but only for these phrases:</p>
-      <ul class="sc-settings-list">
-        <li>wireless headphones</li>
-      </ul>
+      <h2 class="sc-settings-page-title">AI analysis settings</h2>
+      <div class="sc-settings-card">
+        <label class="sc-settings-row">
+          <input type="checkbox" id="settingAiSuggest" checked />
+          <span>While searching</span>
+        </label>
+        <p class="sc-settings-help">Searches you run throughout Firefox will be analysed by AI to provide relevant suggestions.</p>
+        <p class="sc-settings-help">If this is unchecked, suggestions for the hard-coded fallback of ‘wireless headphones’ will show instead.</p>
+        <p class="sc-settings-help"><button type="button" class="sc-settings-reset-btn" id="disclaimerResetBtn">Reset consent dialog</button></p>
+      </div>
+
+      <div class="sc-settings-card">
+        <label class="sc-settings-row">
+          <input type="checkbox" id="settingPageSuggestions" />
+          <span>While browsing (with sidebar open)</span>
+        </label>
+        <p class="sc-settings-help">Pages you visit with the sidebar open will be analysed by AI to provide relevant suggestions.</p>
+        <p class="sc-settings-help" id="browseConsentResetRow"><button type="button" class="sc-settings-reset-btn" id="browseConsentResetBtn" disabled>Reset consent dialog</button></p>
+
+        <div class="sc-settings-subcard">
+          <p class="sc-settings-label">Block these sites from page content analysis</p>
+          <p class="sc-settings-help">Add domains you'd rather not send to the AI. Each entry blocks the domain and any of its subdomains. Many email, collaboration tools, banking, and other categories are already blocked by default — this is for anything we've missed.</p>
+          <form class="sc-settings-domain-add" id="blockedDomainForm">
+            <input type="text" id="blockedDomainInput" placeholder="example.com" autocomplete="off" spellcheck="false" />
+            <button type="submit" class="sc-btn-secondary">Add</button>
+          </form>
+          <ul class="sc-settings-domain-list" id="blockedDomainList"></ul>
+        </div>
+      </div>
+
+      <p class="sc-version" id="settingsVersion">—</p>
     </section>
   </div>
 
@@ -1592,8 +1999,8 @@ body.is-settings .sc-search { display: none; }
        entire sidebar; agreement is persisted in browser.storage.local. -->
   <div class="sc-disclaimer" id="disclaimerOverlay" role="dialog" aria-modal="true" aria-labelledby="disclaimerTitle" hidden>
     <div class="sc-disclaimer-card">
-      <h2 id="disclaimerTitle">Search sidebar prototype privacy</h2>
-      <p id="disclaimerMsg">Any real searches you do in Firefox while this prototype is open are sent to an AI model to generate simulated suggestions. Do not make any private searches while running this extension.</p>
+      <h2 id="disclaimerTitle">Search term AI analysis</h2>
+      <p id="disclaimerMsg">Any real searches you do in Firefox while this prototype is open are sent to an AI model to generate simulated suggestions.</p>
       <button type="button" id="disclaimerAgreeBtn" class="sc-disclaimer-agree">Agree</button>
     </div>
   </div>
@@ -1602,6 +2009,11 @@ body.is-settings .sc-search { display: none; }
     <button type="button" data-row-action="dig" role="menuitem">Dig deeper without searching</button>
     <button type="button" data-row-action="refine" role="menuitem">Refine this search</button>
     <button type="button" data-row-action="remove" role="menuitem">Remove suggestion</button>
+  </div>
+
+  <div class="sc-ff-tooltip" id="ffTooltip" hidden>
+    <span class="sc-ff-tooltip-title"></span>
+    <span class="sc-ff-tooltip-url"></span>
   </div>
 
   <script src="ai.js"></script>

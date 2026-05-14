@@ -42,13 +42,20 @@
     "open_at_install": true
   },
   "background": {
-    "scripts": ["background.js"]
+    "scripts": ["blocked-pages.js", "background.js"]
   },
   "content_scripts": [
     {
       "matches": ["https://octopuxltd.github.io/search-companion/*"],
       "js": ["install-overlay.js"],
       "run_at": "document_end"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "exclude_matches": ["https://octopuxltd.github.io/search-companion/*"],
+      "js": ["page-context.js"],
+      "run_at": "document_idle",
+      "all_frames": false
     }
   ]
 }
