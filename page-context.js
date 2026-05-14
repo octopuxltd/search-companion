@@ -66,3 +66,63 @@ browser.runtime.onMessage.addListener((msg) => {
     });
   }
 });
+
+// SPA navigation: intercept pushState / replaceState so navigations that
+// don't trigger a real page load still notify the background. We wait for
+// document.title to change (the SPA's signal that new content has loaded)
+// rather than using a fixed delay, since pushState fires before the new
+// content is in the DOM.
+(function interceptSpaNavigation() {
+  let pendingObserver = null;
+  let fallbackTimer = null;
+  let settleTimer = null;
+
+  function cancelPending() {
+    if (pendingObserver) { pendingObserver.disconnect(); pendingObserver = null; }
+    clearTimeout(fallbackTimer);
+    clearTimeout(settleTimer);
+  }
+
+  function sendContext() {
+    cancelPending();
+    browser.runtime.sendMessage({
+      type: "page-context",
+      title: document.title || "",
+      url: location.href,
+      text: extractPageText(),
+    }).catch(() => {});
+  }
+
+  function onSpaNavigate() {
+    cancelPending();
+    const titleAtNav = document.title;
+    const titleEl = document.querySelector("title");
+
+    if (titleEl) {
+      pendingObserver = new MutationObserver(() => {
+        if (document.title !== titleAtNav) {
+          // Title changed — give content a moment to settle, then extract.
+          pendingObserver.disconnect();
+          pendingObserver = null;
+          clearTimeout(fallbackTimer);
+          settleTimer = setTimeout(sendContext, 150);
+        }
+      });
+      pendingObserver.observe(titleEl, { childList: true, characterData: true, subtree: true });
+    }
+
+    // Safety net: send after 2 s even if the title never changes.
+    fallbackTimer = setTimeout(sendContext, 2000);
+  }
+
+  for (const method of ["pushState", "replaceState"]) {
+    const original = history[method];
+    history[method] = function (...args) {
+      const result = original.apply(this, args);
+      onSpaNavigate();
+      return result;
+    };
+  }
+
+  window.addEventListener("popstate", onSpaNavigate);
+})();
