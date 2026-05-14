@@ -2403,23 +2403,41 @@ browser.runtime.onMessage.addListener((msg) => {
     return;
   }
   if (msg && msg.type === "page-context" && typeof msg.url === "string") {
-    _sclog("← page-context msg", { url: msg.url.slice(0, 80), title: (msg.title || "").slice(0, 60), textLen: (msg.text || "").length });
-    // Capture duplicate state before setSuggestionsActive updates it — SPA
-    // navigation can fire a second message for the same URL with the leaving
-    // page's title; the duplicate-URL guard in setSuggestionsActive drops it,
-    // and we must also skip recordPageVisit so stale topics don't re-render
-    // the related panels.
+    // msg.tabId is present only when the message comes from background.js after
+    // tabs.onUpdated (authoritative). SPA messages sent directly from the content
+    // script have no tabId (speculative — title may belong to the leaving page).
+    const isAuthoritative = !!msg.tabId;
+    _sclog("← page-context msg", { url: msg.url.slice(0, 80), title: (msg.title || "").slice(0, 60), textLen: (msg.text || "").length, source: isAuthoritative ? "tabs" : "spa" });
+
     const isPageDuplicate = currentSuggKind === "page" && currentSuggSourceKey === msg.url;
-    // Page-derived suggestions don't fill the search input — the input is
-    // for queries the user types, not for current-URL state.
-    setSuggestionsActive({
-      kind: "page",
-      url: msg.url,
-      title: msg.title || "",
-      text: msg.text || "",
-    });
-    // Record the visit for the Firefox Related tab (post-consent, fire-and-forget).
-    if (!isPageDuplicate && msg.title) recordPageVisit(msg.url, msg.title, msg.text || "").catch(() => {});
+    if (isPageDuplicate) {
+      if (!isAuthoritative) {
+        // SPA sent the same URL we're already showing — drop entirely.
+        _sclog("[page-context] SPA duplicate dropped");
+        return;
+      }
+      // Background sent the same URL (tabs.onUpdated fired after SPA already set
+      // the URL). If the title changed the SPA fired with the leaving page's title;
+      // correct all three panels now that we have the real title.
+      const storedTitle = (currentPageContext && typeof currentPageContext === "object" && currentPageContext.title) || "";
+      const newTitle = (msg.title || "").trim();
+      if (!newTitle || newTitle === storedTitle) return;
+      _sclog("[page-context] authoritative title correction", { was: storedTitle.slice(0, 50), now: newTitle.slice(0, 50) });
+      // Clear the stale suggestions cache so loadPageSuggestions re-fetches with the correct title.
+      if (window.SC_AI && SC_AI.pageSuggestionsCache) {
+        SC_AI.pageSuggestionsCache.delete((msg.url || "").split("#")[0].toLowerCase());
+      }
+      currentPageContext = { title: msg.title || "", text: msg.text || "", url: msg.url || "" };
+      refreshHistoryRelatedIfActive();
+      refreshFirefoxRelatedIfActive();
+      loadPageSuggestions(msg.url, msg.title || "", msg.text || "");
+      if (msg.title) recordPageVisit(msg.url, msg.title, msg.text || "").catch(() => {});
+      return;
+    }
+
+    // New URL — page-derived suggestions don't fill the search input.
+    setSuggestionsActive({ kind: "page", url: msg.url, title: msg.title || "", text: msg.text || "" });
+    if (msg.title) recordPageVisit(msg.url, msg.title, msg.text || "").catch(() => {});
     return;
   }
   if (msg && msg.type === "blocked-context" && typeof msg.url === "string") {
