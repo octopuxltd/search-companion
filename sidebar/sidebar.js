@@ -1317,6 +1317,12 @@ async function renderFirefoxRelated() {
   const section = relatedListEl && relatedListEl.closest(".sc-section");
   if (!section) return;
 
+  // Generation counter: any newer call to renderFirefoxRelated will increment
+  // this, causing the check below to discard this (now stale) render. Without
+  // this, an in-flight AI call from the previous page can resolve after the
+  // new page's call and overwrite the panel with leaving-page content.
+  const myGen = ++firefoxRelatedRenderGen;
+
   if (!(await hasConsented())) {
     showConsentPopup("firefox");
     return;
@@ -1410,7 +1416,7 @@ async function renderFirefoxRelated() {
     _sclog("firefox-related fetch failed:", String(err));
   }
 
-  if (!isFirefoxRelatedTabActive()) return;
+  if (!isFirefoxRelatedTabActive() || firefoxRelatedRenderGen !== myGen) return;
 
   const listEl = document.getElementById("firefoxList");
   if (listEl) listEl.hidden = true;
@@ -1731,6 +1737,7 @@ function aiSuggestEnabled() {
 let currentSuggKind = "";
 let currentSuggSourceKey = "";
 let historyRelatedRenderGen = 0;
+let firefoxRelatedRenderGen = 0;
 
 // The active page/query context — plain text used by the history "Related"
 // tab to score history entries by keyword overlap.
