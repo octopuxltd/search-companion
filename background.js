@@ -240,6 +240,104 @@ async function pageSuggestionsEnabled() {
   } catch (e) { return false; }
 }
 
+// DNF auto-search preference. When true, a future "Server not found" skips
+// our standalone DNF page and instead runs the search automatically —
+// either as a real SERP with our injected popup, or as the simulated
+// split-view, per settingDnfAutoSearchMode ("popup" | "split").
+const DNF_AUTOSEARCH_KEY = "settingDnfAutoSearch";
+const DNF_AUTOSEARCH_MODE_KEY = "settingDnfAutoSearchMode";
+async function dnfAutoSearchPref() {
+  try {
+    const data = await browser.storage.local.get([DNF_AUTOSEARCH_KEY, DNF_AUTOSEARCH_MODE_KEY]);
+    return {
+      on: data[DNF_AUTOSEARCH_KEY] === true,
+      mode: data[DNF_AUTOSEARCH_MODE_KEY] === "split" ? "split" : "popup",
+    };
+  } catch (e) { return { on: false, mode: "popup" }; }
+}
+
+// Turn a failed URL into a search query. MUST stay in lock-step with the
+// copy of this logic in sidebar/sim.js (failedUrlToQuery) — they're kept
+// separate because background and the sim page can't share a module in MV2.
+const DNF_SEARCH_PARAM_NAMES = new Set(["q", "query", "search", "k", "s", "term"]);
+const DNF_NOISE_SUBDOMAINS = ["www", "www2", "m", "mobile", "shop", "store"];
+const DNF_STRIPPABLE_EXTS = [".html", ".htm", ".php", ".aspx", ".asp", ".jsp"];
+function dnfLetterDigitTransitions(t) {
+  let n = 0;
+  const isLetter = (c) => c >= "a" && c <= "z" || c >= "A" && c <= "Z";
+  const isDigit = (c) => c >= "0" && c <= "9";
+  for (let i = 1; i < t.length; i++) {
+    const pl = isLetter(t[i - 1]), pd = isDigit(t[i - 1]);
+    const cl = isLetter(t[i]), cd = isDigit(t[i]);
+    if ((pl && cd) || (pd && cl)) n++;
+  }
+  return n;
+}
+function dnfIsJunkToken(t) {
+  if (!t) return true;
+  if (!/\d/.test(t)) return false;
+  if (!/[a-z]/i.test(t)) return false;
+  if (t.length > 15) return true;
+  return dnfLetterDigitTransitions(t) > 3;
+}
+function dnfIsJunkSegment(seg) {
+  if (!seg) return true;
+  const stripped = String(seg).replace(/[^a-z0-9]+/gi, "");
+  if (!stripped) return true;
+  if (!/[a-z]/i.test(stripped)) return stripped.length > 3;
+  const longestDigitRun = (String(seg).match(/\d+/g) || []).reduce((m, r) => Math.max(m, r.length), 0);
+  if (longestDigitRun > 4) return true;
+  return false;
+}
+function failedUrlToQuery(failedUrl, fallbackHost) {
+  let host = fallbackHost || "";
+  let pathSegs = [];
+  let queryParts = [];
+  let searchParamValue = "";
+  try {
+    const u = new URL(failedUrl);
+    host = u.hostname;
+    pathSegs = (u.pathname || "").split("/").filter(Boolean);
+    if (pathSegs.length) {
+      const last = pathSegs[pathSegs.length - 1].toLowerCase();
+      for (const ext of DNF_STRIPPABLE_EXTS) {
+        if (last.endsWith(ext)) { pathSegs[pathSegs.length - 1] = last.slice(0, -ext.length); break; }
+      }
+    }
+    for (const [key, raw] of u.searchParams) {
+      const v = String(raw || "").trim();
+      if (!v) continue;
+      if (DNF_SEARCH_PARAM_NAMES.has(key.toLowerCase()) && !searchParamValue) { searchParamValue = v; continue; }
+      queryParts.push(v);
+    }
+  } catch {}
+  host = String(host || "").toLowerCase();
+  let parts = host.split(".").filter(Boolean);
+  while (parts.length > 1 && DNF_NOISE_SUBDOMAINS.includes(parts[0])) parts.shift();
+  host = parts.join(".");
+  const multi = [".co.uk", ".org.uk", ".ac.uk", ".gov.uk", ".com.au", ".com.br", ".co.jp", ".co.nz", ".co.in"];
+  let matched = false;
+  for (const m of multi) {
+    if (host.endsWith(m)) { host = host.slice(0, -m.length); matched = true; break; }
+  }
+  if (!matched) {
+    const lastDot = host.lastIndexOf(".");
+    if (lastDot > 0) host = host.slice(0, lastDot);
+  }
+  const segments = searchParamValue ? [host, searchParamValue] : [host, ...pathSegs, ...queryParts];
+  const seen = new Set();
+  const out = [];
+  for (const seg of segments) {
+    if (dnfIsJunkSegment(seg)) continue;
+    for (const t of String(seg).replace(/[^a-z0-9]+/gi, " ").toLowerCase().split(" ")) {
+      if (!t || dnfIsJunkToken(t) || seen.has(t)) continue;
+      seen.add(t);
+      out.push(t);
+    }
+  }
+  return out.join(" ");
+}
+
 // TEMP — diagnostic logging for the page-suggestions flow. One line each
 // with a wall-clock timestamp so it's copy-pasteable. Remove once the
 // flow is confirmed working end-to-end.
@@ -357,6 +455,95 @@ function baseUrl(url) {
 }
 
 browser.tabs.onRemoved.addListener((tabId) => tabBaseUrls.delete(tabId));
+
+// When Firefox can't reach a server (DNS / connection / timeout), replace the
+// built-in "Server not found" page with our DNF flow. We hook the *network*
+// layer via webRequest.onErrorOccurred (type main_frame) rather than
+// webNavigation.onErrorOccurred: a genuine failure produces a network error
+// with no successful HTTP response, whereas a page that actually loads fires
+// webRequest.onCompleted instead. webNavigation fired false positives for
+// pages that loaded fine (and even fired onCompleted for the native error
+// page, so it couldn't be used to cancel), which webRequest avoids. Bonus:
+// the network error fires before the native error page renders, cutting the
+// flash. webRequest reports symbolic error names (NS_ERROR_*).
+const NETERROR_CODES_REPLACED = new Set([
+  "NS_ERROR_UNKNOWN_HOST",
+  "NS_ERROR_CONNECTION_REFUSED",
+  "NS_ERROR_NET_TIMEOUT",
+  "NS_ERROR_NET_RESET",
+  "NS_ERROR_NET_INTERRUPT",
+  "NS_ERROR_UNKNOWN_PROXY_HOST",
+  "NS_ERROR_PROXY_CONNECTION_REFUSED",
+]);
+// Tabs we've already redirected this navigation — webRequest may fire once
+// for the http attempt and again for the HTTPS-upgrade retry.
+const recentlyRedirectedTabs = new Set();
+
+async function handleNetError(tabId, failedUrl, errorName) {
+  if (recentlyRedirectedTabs.has(tabId)) {
+    _bglog("[neterror] tab already redirected this nav, skipping");
+    return;
+  }
+  let host = "";
+  try { host = new URL(failedUrl).hostname; } catch {}
+  if (!host) {
+    _bglog("[neterror] no host extracted, skipping", { url: failedUrl });
+    return;
+  }
+  recentlyRedirectedTabs.add(tabId);
+  setTimeout(() => recentlyRedirectedTabs.delete(tabId), 2000);
+
+  const pref = await dnfAutoSearchPref();
+  let target;
+  if (!pref.on) {
+    target = browser.runtime.getURL("sidebar/sim.html?" + new URLSearchParams({
+      kind: "firefox-dnf", domain: host, url: failedUrl,
+    }).toString());
+  } else if (pref.mode === "split") {
+    const q = failedUrlToQuery(failedUrl, host);
+    target = browser.runtime.getURL("sidebar/split-view.html?" + new URLSearchParams({
+      q, left: "firefox-dnf", right: "google-didyoumean", domain: host, consent: "given",
+    }).toString());
+  } else {
+    // Real Google results with our injected popup. The #sc-dnf marker tells
+    // the SERP content script to show the "Server not found" overlay; d / u
+    // carry the failed host + URL.
+    const q = failedUrlToQuery(failedUrl, host);
+    target = "https://www.google.com/search?" + new URLSearchParams({ q }).toString()
+      + "#sc-dnf=1&d=" + encodeURIComponent(host) + "&u=" + encodeURIComponent(failedUrl);
+  }
+  _bglog("[neterror] redirecting", { error: errorName, host, on: pref.on, mode: pref.mode, target: target.slice(0, 120) });
+  browser.tabs.update(tabId, { url: target }).then(
+    () => _bglog("[neterror] tabs.update OK"),
+    (e) => _bglog("[neterror] tabs.update FAILED", { error: String(e) })
+  );
+}
+
+_bglog("[neterror] webRequest available?", { has: !!(browser.webRequest && browser.webRequest.onErrorOccurred) });
+if (browser.webRequest && browser.webRequest.onErrorOccurred) {
+  browser.webRequest.onErrorOccurred.addListener(
+    (details) => {
+      _bglog("[neterror] onErrorOccurred", {
+        type: details.type, error: details.error,
+        url: (details.url || "").slice(0, 120), tabId: details.tabId,
+      });
+      if (details.type !== "main_frame") return;
+      if (details.tabId < 0) return; // not a real tab (e.g. prefetch)
+      if (!NETERROR_CODES_REPLACED.has(details.error)) {
+        _bglog("[neterror] error not in replace list — skipping", { error: details.error });
+        return;
+      }
+      // Don't replace SERP pages — a momentarily-unreachable Google search
+      // should keep native handling rather than being swapped for our DNF.
+      if (detectSerp(details.url)) {
+        _bglog("[neterror] URL is a SERP — leaving native handling alone", { url: details.url.slice(0, 120) });
+        return;
+      }
+      handleNetError(details.tabId, details.url, details.error);
+    },
+    { urls: ["<all_urls>"], types: ["main_frame"] }
+  );
+}
 
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   const evtSummary = {};

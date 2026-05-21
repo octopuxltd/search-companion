@@ -24,6 +24,9 @@
     "storage",
     "notifications",
     "alarms",
+    "webNavigation",
+    "webRequest",
+    "<all_urls>",
     "*://www.google.com/*",
     "*://www.google.co.uk/*",
     "https://*.workers.dev/*"
@@ -56,6 +59,13 @@
       "js": ["page-context.js"],
       "run_at": "document_idle",
       "all_frames": false
+    },
+    {
+      "matches": ["*://www.google.com/search*", "*://www.google.co.uk/search*"],
+      "js": ["serp-overlay.js"],
+      "run_at": "document_start",
+      "all_frames": false
     }
-  ]
+  ],
+  "web_accessible_resources": ["images/no-connection.svg"]
 }

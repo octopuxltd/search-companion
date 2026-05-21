@@ -12,21 +12,178 @@ const params = new URLSearchParams(location.search);
 const query = params.get("q") || "";
 const kind = params.get("kind") || "google";
 const domain = params.get("domain") || "";
+const failedUrl = params.get("url") || "";
 // "given" (default) shows the consent-enabled DNF view with the search form;
 // "none" shows the same page minus the search affordance.
 const consent = params.get("consent") === "none" ? "none" : "given";
 
-// URL builder used by the "Prototype view" footer link to swap variants
-// without disturbing the rest of the query string.
-function buildProtoViewHref(nextConsent) {
-  const next = new URLSearchParams(location.search);
-  next.set("consent", nextConsent);
-  return location.pathname + "?" + next.toString();
+// DNF auto-search settings, shared with the background script. browser.storage
+// when running as a real extension page; localStorage fallback for the
+// file:// preview.
+const DNF_AUTOSEARCH_KEY = "settingDnfAutoSearch";
+const DNF_AUTOSEARCH_MODE_KEY = "settingDnfAutoSearchMode";
+function dnfSettingSet(obj) {
+  try {
+    if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
+      browser.storage.local.set(obj);
+    } else {
+      for (const k of Object.keys(obj)) localStorage.setItem(k, JSON.stringify(obj[k]));
+    }
+  } catch (e) {}
+}
+async function dnfSettingGet(keys) {
+  try {
+    if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
+      return await browser.storage.local.get(keys);
+    }
+    const out = {};
+    for (const k of keys) {
+      const raw = localStorage.getItem(k);
+      if (raw !== null) { try { out[k] = JSON.parse(raw); } catch { out[k] = raw; } }
+    }
+    return out;
+  } catch (e) { return {}; }
 }
 
 document.title = kind === "firefox-dnf"
-  ? "Server Not Found. We’re having trouble finding that site"
+  ? "Server Not Found" + (domain ? ": " + domain : "")
   : "Search: " + (query || kind);
+
+// Turn a hostname into something searchable by stripping common multi-part
+// public suffixes first (.co.uk, .com.au, .org.uk), then any remaining
+// single TLD, plus a leading "www." — so "www.taarget.co.uk" → "taarget".
+// Recognised search-param names — when present, their value is treated as
+// the primary intent and the path is suppressed (it's typically site chrome
+// the user didn't type).
+const SEARCH_PARAM_NAMES = new Set(["q", "query", "search", "k", "s", "term"]);
+// Noise subdomains that add nothing to a search query — stripped before
+// the TLD reduction.
+const NOISE_SUBDOMAINS = ["www", "www2", "m", "mobile", "shop", "store"];
+// File extensions we strip from the last path segment so "/products.html"
+// becomes "products".
+const STRIPPABLE_EXTS = [".html", ".htm", ".php", ".aspx", ".asp", ".jsp"];
+
+// Count letter↔digit transitions in a token. Model numbers have few
+// transitions ("WH1000XM5" = 3, "RTX4090" = 1, "iPhone15" = 1); random
+// IDs jumble all over ("a1b2c3d4" = 7, "9d2a8f01b" = 6).
+function letterDigitTransitions(t) {
+  let n = 0;
+  const isLetter = (c) => c >= "a" && c <= "z" || c >= "A" && c <= "Z";
+  const isDigit = (c) => c >= "0" && c <= "9";
+  for (let i = 1; i < t.length; i++) {
+    const prevL = isLetter(t[i - 1]), prevD = isDigit(t[i - 1]);
+    const curL = isLetter(t[i]), curD = isDigit(t[i]);
+    if ((prevL && curD) || (prevD && curL)) n++;
+  }
+  return n;
+}
+
+// Token-level junk check, applied after a segment-level filter has already
+// dropped digit-only segments (which is where opaque IDs live). At this
+// point a pure-digit token came from a segment that also had letters next
+// to it (e.g. "casio-1985"), so it's almost certainly a model number or
+// year — keep it. Only mixed-case alphanumerics need scrutiny for jumble.
+function isJunkToken(t) {
+  if (!t) return true;
+  if (!/\d/.test(t)) return false;             // no digits = keep
+  if (!/[a-z]/i.test(t)) return false;         // pure digits in this context = keep
+  if (t.length > 15) return true;              // very long mixed = drop
+  return letterDigitTransitions(t) > 3;        // many alternations = jumbled
+}
+
+// A "segment" here = one path component or one query value. If a segment
+// strips down to only digits (e.g. "/12345/" or "?id=99999"), it's an
+// opaque identifier — drop the whole segment. Anything else is split into
+// alphanumeric tokens and each token passes through isJunkToken.
+function isJunkSegment(seg) {
+  if (!seg) return true;
+  const stripped = String(seg).replace(/[^a-z0-9]+/gi, "");
+  if (!stripped) return true;
+  // Pure digits — short stays (versions, page numbers), long is an ID.
+  if (!/[a-z]/i.test(stripped)) return stripped.length > 3;
+  // Any contiguous run of 5+ digits inside the segment marks it as
+  // ID-bearing — drops "A-87654321" while keeping "casio-1985",
+  // "galaxy-s24-2025" (max 4-digit runs), and "wh-1000xm5".
+  const longestDigitRun = (String(seg).match(/\d+/g) || []).reduce((m, r) => Math.max(m, r.length), 0);
+  if (longestDigitRun > 4) return true;
+  return false;
+}
+
+// Build a search query out of a failed URL. Steps:
+//   1. Strip noise subdomains + TLD from the hostname.
+//   2. If the URL has a recognised search param (q, search, k, …), use its
+//      value as the prefill and stop — that's what the user actually typed.
+//   3. Otherwise concatenate hostname + path segments + word-like param
+//      values, dropping ID-shaped tokens but keeping model numbers.
+//   4. Collapse punctuation to spaces, lowercase, and dedupe repeated
+//      tokens so "boots-store.com/boots/hiking" doesn't read "boots boots".
+function failedUrlToQuery(failedUrl, fallbackHost) {
+  let host = fallbackHost || "";
+  let pathSegs = [];
+  let queryParts = [];
+  let searchParamValue = "";
+  try {
+    const u = new URL(failedUrl);
+    host = u.hostname;
+    pathSegs = (u.pathname || "").split("/").filter(Boolean);
+    // Drop common file extensions from the last segment.
+    if (pathSegs.length) {
+      const last = pathSegs[pathSegs.length - 1].toLowerCase();
+      for (const ext of STRIPPABLE_EXTS) {
+        if (last.endsWith(ext)) {
+          pathSegs[pathSegs.length - 1] = last.slice(0, -ext.length);
+          break;
+        }
+      }
+    }
+    for (const [key, raw] of u.searchParams) {
+      const v = String(raw || "").trim();
+      if (!v) continue;
+      if (SEARCH_PARAM_NAMES.has(key.toLowerCase()) && !searchParamValue) {
+        searchParamValue = v;
+        continue;
+      }
+      queryParts.push(v);
+    }
+  } catch {}
+
+  // Hostname: lowercase, strip noise subdomains then TLD.
+  host = String(host || "").toLowerCase();
+  let parts = host.split(".").filter(Boolean);
+  while (parts.length > 1 && NOISE_SUBDOMAINS.includes(parts[0])) parts.shift();
+  host = parts.join(".");
+  const multi = [".co.uk", ".org.uk", ".ac.uk", ".gov.uk", ".com.au", ".com.br", ".co.jp", ".co.nz", ".co.in"];
+  let matched = false;
+  for (const m of multi) {
+    if (host.endsWith(m)) { host = host.slice(0, -m.length); matched = true; break; }
+  }
+  if (!matched) {
+    const lastDot = host.lastIndexOf(".");
+    if (lastDot > 0) host = host.slice(0, lastDot);
+  }
+
+  // If a recognised search param was present, that wins — use its value
+  // as the prefill alongside the host.
+  const segments = searchParamValue
+    ? [host, searchParamValue]
+    : [host, ...pathSegs, ...queryParts];
+
+  // Drop whole segments that look like opaque IDs, then tokenise the
+  // remaining segments, drop jumbled tokens, dedupe case-insensitively.
+  const seen = new Set();
+  const out = [];
+  for (const seg of segments) {
+    if (isJunkSegment(seg)) continue;
+    for (const t of String(seg).replace(/[^a-z0-9]+/gi, " ").toLowerCase().split(" ")) {
+      if (!t) continue;
+      if (isJunkToken(t)) continue;
+      if (seen.has(t)) continue;
+      seen.add(t);
+      out.push(t);
+    }
+  }
+  return out.join(" ");
+}
 
 function escapeHtml(s) {
   return String(s)
@@ -406,7 +563,7 @@ function dnfBuilder() {
       .search input::placeholder { color: #b8b8c0; font-weight: 400; }
       .search-now { flex: none; padding: 10px 18px; background: #0061e0; color: #fff; border: none; border-radius: 999px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
       .search-now:hover { filter: brightness(1.05); }
-      ul { padding-left: 22px; color: #5b5b66; margin: 0 0 22px; }
+      ul { padding-left: 17px; color: #5b5b66; margin: 0 0 22px; }
       li { margin-bottom: 6px; }
       /* "Run the search for me next time" checkbox tucked just under the
          search box. Block-level flex (rather than inline-flex) so the
@@ -428,71 +585,109 @@ function dnfBuilder() {
       .run-next-time input { margin: 0; accent-color: #0061e0; }
       .btn { display: inline-block; margin-top: 4px; padding: 7px 18px; background: transparent; color: #15141a; border: 1px solid #c5c5cc; border-radius: 4px; font-weight: 600; font-size: 14px; cursor: pointer; }
       .btn:hover { background: rgba(0,0,0,0.04); }
-      /* Pinned "this is the consented prototype view" footer — bottom-centred
-         box that switches view variants. The current variant is plain text,
-         the other is a link. */
-      .proto-view {
+
+      /* Bottom-left mode picker for the sim — switches between the two
+         "Show auto-search as" presentations we're prototyping. */
+      .sim-proto-settings {
         position: fixed;
-        left: 50%;
+        left: 0;
         bottom: 0;
-        transform: translateX(-50%);
+        z-index: 50;
         padding: 0;
         background: #f6f7f8;
         border: 1px solid rgba(0,0,0,0.1);
+        border-left: none;
         border-bottom: none;
-        border-radius: 6px 6px 0 0;
+        border-radius: 0 6px 0 0;
+        overflow: visible;
+        font: 12px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        color: #5b5b66;
+      }
+      .sim-proto-settings-header {
+        padding: 2px 6px;
+        background: rgba(0,0,0,0.06);
+        border-radius: 0 6px 0 0;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #6b6b6b;
+      }
+      .sim-mode-picker {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 6px;
+        color: #5b5b66;
+      }
+      .sim-mode-picker-label {
         font-size: 12px;
+        font-weight: 500;
         color: #5b5b66;
         white-space: nowrap;
-        overflow: hidden;
       }
-      .proto-view-header {
-        padding: 4px 14px;
-        background: rgba(0,0,0,0.06);
-        font-size: 11px;
-        font-weight: 600;
-        color: #5b5b66;
-        text-align: center;
-      }
-      .proto-view-body { padding: 7px 14px; }
-      .proto-view a.proto-link,
-      .proto-view .proto-current {
-        display: inline-block;
-        margin: 0 4px;
-        padding: 4px 12px;
-        border-radius: 999px;
+      .sim-mode-picker-control { position: relative; }
+      .sim-mode-picker-trigger {
+        appearance: none; -webkit-appearance: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 500;
         color: #15141a;
-        font-weight: 400;
-        text-decoration: none;
-        line-height: 1.4;
+        background: #fff;
+        border: 1px solid #d5d5da;
+        border-radius: 4px;
+        cursor: pointer;
+        line-height: 1.2;
+        white-space: nowrap;
       }
-      /* Unpressed (out): raised button — lighter top, subtle drop shadow. */
-      .proto-view a.proto-link {
-        background: linear-gradient(#ffffff, #e7e7eb);
-        border: 1px solid rgba(0,0,0,0.18);
-        box-shadow:
-          0 1px 0 rgba(255,255,255,0.9) inset,
-          0 1px 2px rgba(0,0,0,0.18),
-          0 2px 0 rgba(0,0,0,0.08);
+      .sim-mode-picker-trigger:hover { background: #f6f7f8; }
+      .sim-mode-picker-chev {
+        width: 9px; height: 9px;
+        margin-top: 1px;
+        color: #6b6b6b;
       }
-      .proto-view a.proto-link:hover { filter: brightness(0.98); }
-      .proto-view a.proto-link:active {
-        background: linear-gradient(#d8d8de, #c7c7cd);
-        box-shadow:
-          0 1px 2px rgba(0,0,0,0.25) inset,
-          0 2px 4px rgba(0,0,0,0.18) inset;
-        transform: translateY(1px);
+      .sim-mode-picker-panel {
+        position: absolute;
+        bottom: calc(100% + 4px);
+        left: 0;
+        min-width: 220px;
+        padding: 4px;
+        background: #fff;
+        border: 1px solid #d5d5da;
+        border-radius: 6px;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.12);
       }
-      /* Pressed (in): recessed — darker, inset shadow, no drop shadow,
-         nudged down 1px so the row reads as "pushed in". */
-      .proto-view .proto-current {
-        background: linear-gradient(#c7c7cd, #d8d8de);
-        border: 1px solid rgba(0,0,0,0.22);
-        box-shadow:
-          0 1px 3px rgba(0,0,0,0.28) inset,
-          0 2px 5px rgba(0,0,0,0.18) inset;
-        transform: translateY(1px);
+      .sim-mode-picker-panel[hidden] { display: none; }
+      .sim-mode-picker-option {
+        appearance: none; -webkit-appearance: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 7px 8px;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        color: #15141a;
+        background: transparent;
+        border: none;
+        border-radius: 4px;
+        text-align: left;
+        cursor: pointer;
+        white-space: nowrap;
       }
+      .sim-mode-picker-option:hover { background: #f6f7f8; }
+      .sim-mode-picker-tick {
+        width: 12px;
+        flex: none;
+        color: #0061e0;
+        opacity: 0;
+      }
+      .sim-mode-picker-option[aria-checked="true"] .sim-mode-picker-tick { opacity: 1; }
     `,
     body: `
       <div class="wrap">
@@ -518,12 +713,12 @@ function dnfBuilder() {
               `).join("")}
             </div>
           </details>
-          <input type="search" name="q" value="taarget" placeholder="Search with ${escapeHtml(ENGINE_NAMES.google)}" autocomplete="off" />
+          <input type="search" name="q" value="${escapeHtml(failedUrlToQuery(failedUrl, domain))}" placeholder="Search with ${escapeHtml(ENGINE_NAMES.google)}" autocomplete="off" />
           <button type="submit" class="search-now">Search now</button>
         </form>
         <label class="run-next-time">
-          <input type="checkbox"${consent === "given" ? " checked" : ""} />
-          Search automatically next time Firefox can’t find a server
+          <input type="checkbox" id="dnfAutoSearchToggle" />
+          Search automatically when Firefox can’t find a server
         </label>
         <p class="what">What else could you try?</p>
         <ul>
@@ -531,13 +726,31 @@ function dnfBuilder() {
           <li>Check your modem or router</li>
           <li>Disconnect and reconnect to Wi-Fi</li>
         </ul>
-        <button class="btn">Try again</button>
+        <button class="btn" id="dnfTryAgainBtn">Try again</button>
       </div>
-      <div class="proto-view">
-        <div class="proto-view-header">Prototype view</div>
-        <div class="proto-view-body"><strong>Run the search?</strong> ${consent === "given"
-          ? `<a href="${escapeHtml(buildProtoViewHref("none"))}" class="proto-link">No consent yet</a><span class="proto-current">Consent given</span>`
-          : `<span class="proto-current">No consent yet</span><a href="${escapeHtml(buildProtoViewHref("given"))}" class="proto-link">Consent given</a>`}</div>
+      <div class="sim-proto-settings">
+      <div class="sim-proto-settings-header">Prototype settings</div>
+      <div class="sim-mode-picker" id="simModePicker">
+        <div class="sim-mode-picker-label">When searching automatically, show</div>
+        <div class="sim-mode-picker-control">
+        <button type="button" class="sim-mode-picker-trigger" id="simModePickerTrigger" aria-haspopup="listbox" aria-expanded="false">
+          <span class="sim-mode-picker-current">real results + popup</span>
+          <svg class="sim-mode-picker-chev" viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M2 4.5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="sim-mode-picker-panel" role="listbox" hidden>
+          <button type="button" class="sim-mode-picker-option" role="option" data-mode="popup" aria-checked="true">
+            <svg class="sim-mode-picker-tick" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5l3 3 5-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            real results + popup
+          </button>
+          <button type="button" class="sim-mode-picker-option" role="option" data-mode="split" aria-checked="false">
+            <svg class="sim-mode-picker-tick" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5l3 3 5-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            simulated results in faked split-view
+          </button>
+        </div>
+        </div>
+      </div>
       </div>
     `,
   };
@@ -557,51 +770,114 @@ const BUILDERS = {
 const builder = (BUILDERS[kind] || BUILDERS.google);
 const { styles, body } = builder();
 
-// When this page is hosted inside split-view.html, the proto-view box is
-// rendered by the parent so it can sit dead-centre across both iframes
-// instead of being trapped inside one pane.
-const inSplitView = window.top !== window;
-
 const styleEl = document.createElement("style");
 styleEl.textContent = styles;
 document.head.appendChild(styleEl);
 document.body.innerHTML = body;
-if (inSplitView) {
-  const pv = document.querySelector(".proto-view");
-  if (pv) pv.remove();
-}
 
-// Prototype-view footer link picks a different destination for each variant:
-//   • "Consent given" → split-view.html with the DNF page on the left and the
-//     simulated Google "did you mean" results on the right
-//   • "No consent"    → standalone sim.html (no split view, no results)
-// Always navigates the top-level window so the switch works whether we're
-// already inside the split-view iframe or on the standalone page.
+// Mode picker — chooses which auto-search presentation the background
+// script uses (real Google + popup, or the simulated split-view). Persists
+// to settingDnfAutoSearchMode.
 if (kind === "firefox-dnf") {
-  const protoLink = document.querySelector(".proto-view .proto-link");
-  if (protoLink) {
-    protoLink.addEventListener("click", (e) => {
-      e.preventDefault();
-      const nextConsent = consent === "given" ? "none" : "given";
-      let newUrl;
-      if (nextConsent === "given") {
-        const p = new URLSearchParams({ q: query, left: "firefox-dnf", right: "google-didyoumean" });
-        if (domain) p.set("domain", domain);
-        p.set("consent", "given");
-        newUrl = "split-view.html?" + p.toString();
-      } else {
-        const p = new URLSearchParams({ kind: "firefox-dnf", q: query });
-        if (domain) p.set("domain", domain);
-        p.set("consent", "none");
-        newUrl = "sim.html?" + p.toString();
-      }
-      try { window.top.location.href = newUrl; }
-      catch { window.location.href = newUrl; }
+  const picker = document.getElementById("simModePicker");
+  if (picker) {
+    const trigger = picker.querySelector(".sim-mode-picker-trigger");
+    const panel = picker.querySelector(".sim-mode-picker-panel");
+    const current = picker.querySelector(".sim-mode-picker-current");
+    const options = picker.querySelectorAll(".sim-mode-picker-option");
+    function close() { panel.hidden = true; trigger.setAttribute("aria-expanded", "false"); }
+    function open() { panel.hidden = false; trigger.setAttribute("aria-expanded", "true"); }
+    function selectOption(opt) {
+      options.forEach((o) => o.setAttribute("aria-checked", o === opt ? "true" : "false"));
+      current.textContent = opt.textContent.trim();
+    }
+    trigger.addEventListener("click", (e) => { e.stopPropagation(); panel.hidden ? open() : close(); });
+    document.addEventListener("click", (e) => { if (!panel.hidden && !picker.contains(e.target)) close(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !panel.hidden) close(); });
+    options.forEach((opt) => {
+      opt.addEventListener("click", () => {
+        selectOption(opt);
+        dnfSettingSet({ [DNF_AUTOSEARCH_MODE_KEY]: opt.dataset.mode });
+        close();
+      });
+    });
+    // Reflect the saved mode on load.
+    dnfSettingGet([DNF_AUTOSEARCH_MODE_KEY]).then((d) => {
+      const mode = d[DNF_AUTOSEARCH_MODE_KEY] === "split" ? "split" : "popup";
+      const opt = picker.querySelector(`.sim-mode-picker-option[data-mode="${mode}"]`);
+      if (opt) selectOption(opt);
     });
   }
 }
 
+// DNF auto-search checkbox. Checking it turns on auto-search so the next
+// "Server not found" runs the search automatically (showing the popup or
+// split-view per the mode picker); unchecking falls back to this page.
+if (kind === "firefox-dnf") {
+  const toggle = document.getElementById("dnfAutoSearchToggle");
+  if (toggle) {
+    dnfSettingGet([DNF_AUTOSEARCH_KEY]).then((d) => {
+      toggle.checked = d[DNF_AUTOSEARCH_KEY] === true;
+    });
+    toggle.addEventListener("change", () => {
+      dnfSettingSet({ [DNF_AUTOSEARCH_KEY]: toggle.checked });
+    });
+  }
+}
+
+// "Try again": re-navigate the tab to the original failed URL. If DNS is
+// now resolvable the page loads; if it still fails, the background listener
+// will catch it and bring us straight back here.
+if (kind === "firefox-dnf") {
+  const tryAgainBtn = document.getElementById("dnfTryAgainBtn");
+  if (tryAgainBtn && failedUrl) {
+    tryAgainBtn.addEventListener("click", () => {
+      try { window.top.location.href = failedUrl; }
+      catch { window.location.href = failedUrl; }
+    });
+  } else if (tryAgainBtn) {
+    tryAgainBtn.disabled = true;
+  }
+}
+
+// Grow the search box when the query is long enough to spill past the
+// default width. Measures the input text in a hidden span, sets the box
+// width to fit, then re-centres it via margin-left.
+function resizeDnfSearchBox() {
+  const box = document.querySelector(".search");
+  const input = box && box.querySelector('input[name="q"]');
+  if (!box || !input) return;
+  const measurer = document.createElement("span");
+  const cs = getComputedStyle(input);
+  measurer.style.cssText = "visibility:hidden;position:absolute;white-space:pre;left:-9999px;top:-9999px;";
+  measurer.style.font = cs.font;
+  measurer.style.fontSize = cs.fontSize;
+  measurer.style.fontWeight = cs.fontWeight;
+  measurer.style.letterSpacing = cs.letterSpacing;
+  measurer.textContent = input.value || input.placeholder || "";
+  document.body.appendChild(measurer);
+  const textWidth = measurer.offsetWidth;
+  measurer.remove();
+  // Fixed budget for chrome: engine pill (~46) + gap + button (~110) +
+  // box padding (24) + input breathing room (40). Then add the text width.
+  const desired = 46 + 10 + textWidth + 40 + 10 + 110 + 24;
+  // Never shrink below the default 550px box; never exceed 620px (or
+  // viewport minus 32px on narrow screens).
+  const min = 550;
+  const max = Math.min(620, window.innerWidth - 32);
+  const w = Math.max(min, Math.min(desired, max));
+  box.style.width = w + "px";
+  box.style.marginLeft = `calc(50% - ${(w / 2).toFixed(2)}px)`;
+}
+
 // DNF engine switcher: regular DOM listeners now that we're a real page.
+if (kind === "firefox-dnf" && document.getElementById("dnfForm")) {
+  resizeDnfSearchBox();
+  const input = document.querySelector('.search input[name="q"]');
+  if (input) input.addEventListener("input", resizeDnfSearchBox);
+  window.addEventListener("resize", resizeDnfSearchBox);
+}
+
 if (kind === "firefox-dnf" && document.getElementById("dnfForm")) {
   const details = document.getElementById("engineWrap");
   const icon = document.getElementById("engineIcon");
