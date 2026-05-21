@@ -24,8 +24,16 @@
   --heading-bg: #f6f6f6;
 }
 
+/* Dark palette. Activated by either the OS preference (when the theme
+   toggle is "system") or an explicit data-theme="dark" on <html>.
+   data-theme="light" wins over the media query because attribute selectors
+   are more specific. */
+:root[data-theme="dark"],
+:root:not([data-theme="light"]):not([data-theme="dark"]) {
+  /* Placeholder — light wins by default in this no-override branch. */
+}
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #1c1b22;
     --fg: #f5f5f5;
     --muted: #a8a8a8;
@@ -36,6 +44,17 @@
     --btn-bg-hover: #3a3944;
     --heading-bg: #27262d;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #1c1b22;
+  --fg: #f5f5f5;
+  --muted: #a8a8a8;
+  --border: #3a3944;
+  --accent: #8ab4f8;
+  --hover: #2a2933;
+  --btn-bg: #2f2f37;
+  --btn-bg-hover: #3a3944;
+  --heading-bg: #27262d;
 }
 
 * { box-sizing: border-box; }
@@ -440,40 +459,212 @@ body:not(.sc-content-ready) .sc-content {
   gap: 8px;
 }
 
-.sc-suggestions-mode {
+/* Sections with the in-heading tab dropdown (Related / Latest). Match the
+   plain heading strip — same height as "Search suggestions", no bottom rule.
+   Baseline alignment so the dropdown trigger's "Latest" sits on the same
+   text baseline as the heading title on the left. */
+.sc-section--tabbed h2 {
+  align-items: baseline;
+}
+/* Original tab strip retained in the DOM as the source of truth for which
+   tab is active (the .sc-tab-switcher below is a thin presentational layer
+   that delegates clicks to these buttons). Hidden visually now. */
+.sc-section-tabs {
+  display: none;
+}
+
+/* Compact dropdown that replaced the Related / Latest tab strip in tabbed
+   sections. Trigger shows the current selection + chevron; the panel lists
+   both choices with a tick on the active one and (when Related isn't
+   available) an explanatory note linking to the whitelist settings. */
+/* Inline indicator that the suggestions are derived from the current page
+   (only shown while on a whitelisted site). Lives in the Search suggestions
+   h2 header alongside the title. */
+.sc-related-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.sc-related-badge[hidden] { display: none; }
+
+/* "Analyze now" as a plain blue text link, not a pill. Shown in the same
+   slot as the Related badge when the current site isn't on the whitelist —
+   clicking runs the page analysis for this page only. */
+.sc-related-analyze {
   appearance: none;
   -webkit-appearance: none;
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.sc-related-analyze:hover { filter: brightness(1.1); }
+.sc-related-analyze:disabled { opacity: 0.6; cursor: default; text-decoration: none; }
+.sc-related-analyze[hidden] { display: none; }
+
+/* Cluster wrapper so the h2's justify-content:space-between sees just two
+   children (title + cluster) instead of pushing the badge / button / menu
+   apart from each other. */
+.sc-related-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* "•••" menu that appears next to the Related badge after the user has
+   manually opted a non-whitelisted page in via Analyze now. Single item
+   inside: "Whitelist this site for analysis". */
+.sc-related-menu { position: relative; display: inline-flex; }
+.sc-related-menu[hidden] { display: none; }
+.sc-related-menu-trigger {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+  /* Negative margin keeps the trigger from making the h2 taller than the
+     title's natural line-box; the visible click area is still 14×14. */
+  margin: -2px 0;
+}
+.sc-related-menu-trigger svg { width: 11px; height: 11px; }
+.sc-related-menu-trigger:hover { background: var(--hover); color: var(--fg); }
+.sc-related-menu-popup {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  min-width: 200px;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+}
+.sc-related-menu-popup[hidden] { display: none; }
+.sc-related-menu-item {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sc-related-menu-item:hover,
+.sc-related-menu-item:focus-visible { background: var(--hover); outline: none; }
+
+.sc-tab-switcher {
+  position: relative;
+  display: inline-flex;
+  align-self: center;
+  /* Pull the switcher into the h2's right padding so the chevron sits
+     near the row content's right edge. */
+  margin-right: -3px;
+}
+.sc-tab-switcher-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 8px;
   font: inherit;
   font-size: 11px;
   font-weight: 400;
   color: var(--muted);
-  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M1 2.5l3 3 3-3' fill='none' stroke='%23999' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 2px center;
-  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-  border-radius: 3px;
-  padding: 1px 14px 1px 5px;
-  cursor: default;
-  white-space: nowrap;
+  background: var(--btn-bg);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1.2;
 }
-.sc-suggestions-mode:focus { outline: none; }
-.sc-suggestions-mode:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-
-/* Sections with classic in-heading tab controls (Related / Latest etc.).
-   h2 aligns items to the bottom so tabs sit flush at the heading's lower
-   edge. A bottom border on the h2 acts as the "tab bar line" that the
-   active tab breaks through. */
-.sc-section--tabbed h2 {
+.sc-tab-switcher-btn:hover { background: var(--btn-bg-hover, var(--hover)); }
+.sc-tab-switcher-chevron {
+  position: relative;
+  top: 1px;
+  width: 6px;
+  height: 6px;
+  color: var(--muted);
+  transition: transform 120ms ease;
+}
+.sc-tab-switcher-btn[aria-expanded="true"] .sc-tab-switcher-chevron {
+  transform: rotate(180deg);
+}
+.sc-tab-switcher-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  min-width: 200px;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+.sc-tab-switcher-option {
+  appearance: none;
+  -webkit-appearance: none;
+  display: flex;
   align-items: center;
-  padding-bottom: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  text-align: left;
+  cursor: pointer;
 }
-.sc-section--tabbed h2 > span:first-child {
-  margin-top: -5px;
+.sc-tab-switcher-option:hover,
+.sc-tab-switcher-option:focus-visible { background: var(--hover, var(--btn-bg)); outline: none; }
+.sc-tab-switcher-check { width: 12px; text-align: center; visibility: hidden; color: var(--accent); }
+.sc-tab-switcher-option.is-active .sc-tab-switcher-check { visibility: visible; }
+.sc-tab-switcher-option:disabled { color: var(--muted); cursor: default; }
+.sc-tab-switcher-option:disabled:hover { background: transparent; }
+/* The note sits below the (disabled) Related option when off a whitelisted
+   site. No divider; left-indented so its text lines up with the option
+   labels above. */
+.sc-tab-switcher-note {
+  margin: -4px 10px 4px 30px;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+  line-height: 1.4;
 }
-.sc-section-tabs {
-  display: inline-flex;
-  align-self: flex-end;
-  gap: 2px;
-  line-height: 1;
+.sc-tab-switcher-link {
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 .sc-section-tab {
   flex: 0 0 auto;
@@ -497,6 +688,10 @@ body:not(.sc-content-ready) .sc-content {
   opacity: 0.4;
   cursor: default;
 }
+/* Related tab is hidden entirely off whitelisted domains (no page context
+   to relate to) — the class sets display:flex/inline so [hidden] needs the
+   explicit override to win. */
+.sc-section-tab[hidden] { display: none; }
 
 .sc-h2-action {
   appearance: none;
@@ -590,10 +785,13 @@ body:not(.sc-content-ready) .sc-content {
           mask: url("data:image/svg+xml;utf8,%3Csvg%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2032%2032%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M13.0638%200.460632H13.0679V0.462443C16.6369%200.463477%2019.8686%201.9111%2022.2073%204.25025C24.542%206.58605%2025.9884%209.81494%2025.9907%2013.3811H25.9925V13.3896V13.4H25.9907C25.9894%2014.8372%2025.7535%2016.2205%2025.3198%2017.5103C25.2471%2017.7268%2025.171%2017.9347%2025.0929%2018.1334V18.1352C24.7189%2019.0818%2024.2355%2019.9767%2023.6582%2020.801L31.1801%2027.5617L31.1847%2027.5658L31.2253%2027.6036L31.2282%2027.6064C31.6529%2028.0107%2031.8841%2028.552%2031.9133%2029.1013C31.9418%2029.6445%2031.7729%2030.2001%2031.4015%2030.6457L31.3986%2030.6498L31.3534%2030.7023L31.3443%2030.7114L31.3066%2030.7528L31.3024%2030.7582C30.8976%2031.1829%2030.3573%2031.4136%2029.8075%2031.4426C29.2651%2031.4713%2028.709%2031.3029%2028.2631%2030.931L28.2592%2030.9281L28.2065%2030.8829L28.199%2030.8767L20.5057%2023.9621C20.2781%2024.1225%2020.0458%2024.2748%2019.8107%2024.4186C19.4918%2024.6139%2019.1615%2024.7978%2018.8245%2024.9657C17.0918%2025.83%2015.1339%2026.3163%2013.064%2026.3163V26.3181H13.0599V26.3163C9.49088%2026.3153%206.25863%2024.8676%203.91999%2022.5285C1.58445%2020.1927%200.138904%2016.9633%200.136576%2013.3982H0.134766V13.3896V13.3855H0.136576C0.137611%209.81649%201.58523%206.58424%203.92439%204.2456C6.26018%201.9111%209.48907%200.464771%2013.0552%200.462443V0.460632H13.0638ZM13.0679%203.36001V3.36182H13.0638H13.0552V3.36001C10.2914%203.36182%207.78617%204.4851%205.97257%206.29792C4.15923%208.11074%203.03492%2010.6185%203.03414%2013.3857H3.03595V13.3899V13.3984H3.03414C3.03595%2016.1623%204.15846%2018.6662%205.97206%2020.4803C7.78488%2022.2939%2010.2927%2023.4182%2013.0596%2023.4187V23.4169H13.0638H13.0723V23.4187C15.8361%2023.4169%2018.3403%2022.2942%2020.1544%2020.4808C21.9678%2018.668%2023.0921%2016.161%2023.0926%2013.394H23.091V13.3899V13.3814H23.0926C23.091%2010.6175%2021.9675%208.1123%2020.1549%206.2987C18.3421%204.4851%2015.8351%203.36078%2013.0679%203.36001Z%22%20fill%3D%22black%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
 }
 
-/* Clock icon for all items in the Firefox Related list — overrides the
-   magnifying-glass rule on fake items (data-q) and adds an icon to real
-   items (href-only). Higher specificity (ID + element) beats the class rule. */
-#firefoxRelatedList a::before {
+/* Clock icon for every item in the Firefox section (Latest + Related) and
+   the search-history section — overrides the magnifying-glass rule on fake
+   items (data-q) and adds an icon to real items (href-only). Higher
+   specificity (ID + element / attr + 2 classes) beats the class rule. */
+section[aria-label="From Firefox"] .sc-list a::before,
+section[aria-label="From Firefox"] .sc-list a::before,
+section[aria-label="Your search history"] .sc-list a::before {
   content: "";
   flex: none;
   width: 14px;
@@ -603,6 +801,86 @@ body:not(.sc-content-ready) .sc-content {
   -webkit-mask: url("data:image/svg+xml;utf8,%3Csvg%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2032%2032%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2213%22%20stroke%3D%22black%22%20stroke-width%3D%222.5%22%2F%3E%3Cpath%20d%3D%22M16%208v8l5%203%22%20stroke%3D%22black%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
           mask: url("data:image/svg+xml;utf8,%3Csvg%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2032%2032%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2213%22%20stroke%3D%22black%22%20stroke-width%3D%222.5%22%2F%3E%3Cpath%20d%3D%22M16%208v8l5%203%22%20stroke%3D%22black%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
 }
+
+/* Three-column layout for Firefox section items: site favicon, source icon
+   (clock), then the two-line title + URL/timestamp stack. The icon column
+   stays centred vertically against the whole row. */
+section[aria-label="From Firefox"] .sc-list a,
+section[aria-label="From Firefox"] .sc-list a {
+  display: grid;
+  grid-template-columns: 16px 14px 1fr;
+  column-gap: 8px;
+  row-gap: 1px;
+  align-items: center;
+}
+section[aria-label="From Firefox"] .sc-list a > .sc-favicon,
+section[aria-label="From Firefox"] .sc-list a > .sc-favicon {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  width: 16px;
+  height: 16px;
+  align-self: center;
+  object-fit: contain;
+  /* Fall back invisibly when the favicon fetch errors so the grid cell still
+     reserves space and rows stay aligned. */
+  background: transparent;
+}
+/* Placeholder shown for fake AI suggestions that don't have a real URL —
+   muted globe glyph so it reads as "generic web result" rather than a hole. */
+section[aria-label="From Firefox"] .sc-list a > .sc-favicon--placeholder,
+section[aria-label="From Firefox"] .sc-list a > .sc-favicon--placeholder {
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+section[aria-label="From Firefox"] .sc-list a::before,
+section[aria-label="From Firefox"] .sc-list a::before {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+section[aria-label="From Firefox"] .sc-list a > .sc-title,
+section[aria-label="From Firefox"] .sc-list a > .sc-title {
+  grid-column: 3;
+  grid-row: 1;
+}
+section[aria-label="From Firefox"] .sc-list a > .sc-meta,
+section[aria-label="From Firefox"] .sc-list a > .sc-meta {
+  grid-column: 3;
+  grid-row: 2;
+  padding-right: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Firefox section: URL on line 2 by default, "You last visited…" on hover.
+   Both fade out at the right so they don't crash into the 3-dot menu that
+   appears on hover, and so long URLs don't slam-truncate. */
+section[aria-label="From Firefox"] .sc-list .sc-meta-url,
+section[aria-label="From Firefox"] .sc-list .sc-meta-ts,
+section[aria-label="From Firefox"] .sc-list .sc-meta-url,
+section[aria-label="From Firefox"] .sc-list .sc-meta-ts {
+  white-space: nowrap;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 2px), transparent);
+          mask-image: linear-gradient(to right, black calc(100% - 2px), transparent);
+}
+section[aria-label="From Firefox"] .sc-list .sc-meta-url,
+section[aria-label="From Firefox"] .sc-list .sc-meta-url { display: block; }
+section[aria-label="From Firefox"] .sc-list .sc-meta-ts,
+section[aria-label="From Firefox"] .sc-list .sc-meta-ts { display: none; }
+/* Fake/AI items without a URL fall through to the timestamp by default. */
+section[aria-label="From Firefox"] .sc-list .sc-meta > .sc-meta-ts:only-child,
+section[aria-label="From Firefox"] .sc-list .sc-meta > .sc-meta-ts:only-child { display: block; }
+section[aria-label="From Firefox"] .sc-list li:hover .sc-meta-url,
+section[aria-label="From Firefox"] .sc-list li:focus-within .sc-meta-url,
+section[aria-label="From Firefox"] .sc-list li:hover .sc-meta-url,
+section[aria-label="From Firefox"] .sc-list li:focus-within .sc-meta-url { display: none; }
+section[aria-label="From Firefox"] .sc-list li:hover .sc-meta-ts,
+section[aria-label="From Firefox"] .sc-list li:focus-within .sc-meta-ts,
+section[aria-label="From Firefox"] .sc-list li:hover .sc-meta-ts,
+section[aria-label="From Firefox"] .sc-list li:focus-within .sc-meta-ts { display: block; }
 
 .sc-list a > span:not(.sc-meta):first-of-type,
 .sc-list a > .sc-title { flex: 1; min-width: 0; }
@@ -661,7 +939,7 @@ body:not(.sc-content-ready) .sc-content {
 .sc-show-more:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .sc-show-more:disabled { color: var(--muted); opacity: 0.5; pointer-events: none; }
 
-/* Footer row at the bottom of "Suggested next searches": Show more on the
+/* Footer row at the bottom of "Search suggestions": Show more on the
    left (when applicable), the AI on/off toggle on the right. Toggle keeps
    its slot even when Show more is hidden so it doesn't shift. */
 .sc-suggestions-footer {
@@ -671,6 +949,11 @@ body:not(.sc-content-ready) .sc-content {
   gap: 12px;
 }
 .sc-suggestions-footer .sc-show-more {
+  margin-top: 0;
+}
+/* Tabbed sections (Your search history, From Firefox) keep the same flush
+   gap as the Search suggestions footer — no extra space above Show more. */
+.sc-section--tabbed .sc-show-more {
   margin-top: 0;
 }
 
@@ -814,6 +1097,14 @@ body:not(.sc-content-ready) .sc-content {
   flex: none;
   accent-color: var(--accent);
 }
+/* Required-note that drops to a new line under its option label, indented
+   to align with the label text (not the checkbox). */
+.sc-settings-row .sc-settings-required {
+  display: block;
+  opacity: 0.5;
+  font-size: 12px;
+}
+.sc-settings-row:has(.sc-settings-required) { align-items: flex-start; }
 
 .sc-settings-help {
   margin: 0 0 4px;
@@ -834,7 +1125,7 @@ body:not(.sc-content-ready) .sc-content {
    heading isn't a sticky section divider — it's the page title. */
 #tab-settings .sc-settings-page-title {
   position: static;
-  margin: 0 0 16px;
+  margin: 0;
   padding: 0;
   background: transparent;
   box-shadow: none;
@@ -843,6 +1134,48 @@ body:not(.sc-content-ready) .sc-content {
   letter-spacing: -0.01em;
   color: var(--fg);
   display: block;
+}
+/* Settings page header row: title on the left, theme toggle on the right. */
+#tab-settings .sc-settings-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+/* Segmented 3-way light / system / dark theme switch. */
+.sc-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  background: var(--btn-bg);
+  border-radius: 999px;
+}
+.sc-theme-toggle-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.sc-theme-toggle-btn:hover { color: var(--fg); }
+.sc-theme-toggle-btn.is-active {
+  color: var(--accent);
+  background: var(--bg);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 0 0 1px color-mix(in srgb, var(--border) 50%, transparent);
+}
+.sc-theme-toggle-btn:focus { outline: none; }
+.sc-theme-toggle-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 /* Section heading above the AI-suggestion cards — sets up "Use AI to
@@ -906,9 +1239,18 @@ body:not(.sc-content-ready) .sc-content {
   flex: 1 1 auto;
 }
 #tab-settings .sc-version {
-  margin: 16px 4px 0 4px;
-  margin-top: auto;
+  margin: 0;
   text-align: right;
+}
+/* Footer row anchored to the bottom of the Settings panel: "Clear prototype
+   cache" pill on the left, version string on the right. */
+.sc-settings-footer {
+  margin-top: auto;
+  padding: 16px 4px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .sc-settings-reset-btn {
   appearance: none; -webkit-appearance: none;
@@ -983,6 +1325,9 @@ body:not(.sc-content-ready) .sc-content {
   flex: none;
   appearance: none;
   -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 22px;
   height: 22px;
   padding: 0;
@@ -990,6 +1335,7 @@ body:not(.sc-content-ready) .sc-content {
   border: none;
   border-radius: 50%;
   color: var(--muted);
+  cursor: pointer;
 }
 .sc-settings-domain-list li button:hover { color: var(--accent); background: rgba(0,0,0,0.05); }
 @media (prefers-color-scheme: dark) {
@@ -1088,6 +1434,11 @@ body:not(.sc-content-ready) .sc-content {
   gap: 4px;
   margin: 0 0 10px;
 }
+/* When the visible Multi-search list sits above a Show more drawer, drop its
+   bottom margin and the inner drawer list's margin so the Show more button
+   tucks right under the list instead of floating 26px below it. */
+#multiList { margin-bottom: 0; }
+.sc-more > .sc-multi-list { margin: 0; }
 
 /* Aligned with the search suggestion list below — icon at the same x-position
    as the magnifying-glass icons, name at the same x as the suggestion text. */
@@ -1207,6 +1558,18 @@ body:not(.sc-content-ready) .sc-content {
      fallback covers the brief moment before the first measurement runs. */
   min-height: var(--skel-row-h, 34px);
 }
+/* Firefox-section skeletons: collapse the 3-column favicon/clock/text grid
+   into a simple block so the shimmer bar sits where the text will load, not
+   where the favicon will. Also drop the source-icon ::before — nothing to
+   indicate yet. */
+section[aria-label="From Firefox"] .sc-list li.sc-skel-row > a,
+section[aria-label="From Firefox"] .sc-list li.sc-skel-row > a {
+  display: block;
+}
+section[aria-label="From Firefox"] .sc-list li.sc-skel-row > a::before,
+section[aria-label="From Firefox"] .sc-list li.sc-skel-row > a::before {
+  content: none;
+}
 /* Fade the shimmer bar only — keep the magnifying-glass icon at full
    muted strength so the row still reads as a search suggestion. */
 .sc-list li.sc-skel-row .sc-skel-line { opacity: 0.35; }
@@ -1281,13 +1644,12 @@ body:not(.sc-content-ready) .sc-content {
   text-align: center;
 }
 .sc-disclaimer-card p {
-  margin: 0 0 14px;
+  margin: 0 0 8px;
   font-size: 13px;
   line-height: 1.55;
   color: var(--fg);
   text-align: center;
 }
-
 .sc-disclaimer-agree {
   appearance: none;
   -webkit-appearance: none;
@@ -1310,35 +1672,6 @@ body:not(.sc-content-ready) .sc-content {
   padding: 0 12px 2px;
   font-size: 11px;
   font-weight: 500;
-}
-
-/* Tooltip shown after "Refine this search" — points up at the submit button
-   so the user knows to edit the term then click the arrow. */
-.sc-ff-tooltip {
-  position: fixed;
-  z-index: 50;
-  padding: 7px 10px;
-  background: var(--fg);
-  color: var(--bg);
-  border-radius: 5px;
-  font-size: 12px;
-  line-height: 1.4;
-  max-width: 320px;
-  pointer-events: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-  word-break: break-all;
-}
-
-.sc-ff-tooltip-title {
-  display: block;
-  font-weight: 500;
-}
-
-.sc-ff-tooltip-url {
-  display: block;
-  margin-top: 3px;
-  opacity: 0.65;
-  font-size: 11px;
 }
 
 .sc-refine-tip {
@@ -1634,13 +1967,30 @@ body.is-settings .sc-search { display: none; }
   </header>
 
   <div class="sc-content" id="tab-current" role="tabpanel" aria-labelledby="tabbtn-current">
-    <section class="sc-section" id="suggestionsSection" aria-label="Suggested next searches" hidden>
+    <section class="sc-section" id="suggestionsSection" aria-label="Search suggestions" hidden>
       <h2>
-        <span>Suggested next searches</span>
-        <select class="sc-suggestions-mode" id="suggestionsMode" aria-label="Suggestion mode">
-          <option value="search">While searching</option>
-          <option value="browse">Searching &amp; browsing</option>
-        </select>
+        <span>Search suggestions</span>
+        <span class="sc-related-cluster">
+          <span class="sc-related-badge" id="suggestionsRelatedBadge" hidden>
+            <span>Related</span>
+            <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+              <path d="M2 6.5l2.5 2.5L10 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <button type="button" class="sc-related-analyze" id="suggestionsAnalyzeBtn" hidden>Analyze now</button>
+          <span class="sc-related-menu" id="suggestionsRelatedMenu" hidden>
+            <button type="button" class="sc-related-menu-trigger" id="suggestionsRelatedMenuBtn" aria-haspopup="menu" aria-expanded="false" aria-label="More actions">
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <circle cx="8" cy="3" r="1.4" fill="currentColor"/>
+                <circle cx="8" cy="8" r="1.4" fill="currentColor"/>
+                <circle cx="8" cy="13" r="1.4" fill="currentColor"/>
+              </svg>
+            </button>
+            <div class="sc-related-menu-popup" role="menu" hidden>
+              <button type="button" class="sc-related-menu-item" data-action="whitelist" role="menuitem">Whitelist this site for analysis</button>
+            </div>
+          </span>
+        </span>
       </h2>
       <div class="sc-slow-msg" id="suggestionsSlowMsg" aria-hidden="true">
         <span>Slow because</span>
@@ -1679,12 +2029,29 @@ body.is-settings .sc-search { display: none; }
       </div>
     </section>
 
-    <section class="sc-section sc-section--tabbed" aria-label="From your search history">
+    <section class="sc-section sc-section--tabbed" aria-label="Your search history">
       <h2>
-        <span>From your search history</span>
+        <span>Your search history</span>
         <span class="sc-section-tabs" role="tablist" aria-label="History view">
           <button class="sc-section-tab" role="tab" aria-selected="false">Related</button>
           <button class="sc-section-tab is-active" role="tab" aria-selected="true">Latest</button>
+        </span>
+        <span class="sc-tab-switcher">
+          <button type="button" class="sc-tab-switcher-btn" aria-haspopup="listbox" aria-expanded="false">
+            <span class="sc-tab-switcher-label">Latest</span>
+            <svg class="sc-tab-switcher-chevron" viewBox="0 0 8 8" width="8" height="8" aria-hidden="true"><path d="M1 2.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="sc-tab-switcher-panel" role="listbox" hidden>
+            <button type="button" class="sc-tab-switcher-option" role="option" data-tab="latest">
+              <span class="sc-tab-switcher-check" aria-hidden="true">✓</span>
+              <span>Latest</span>
+            </button>
+            <button type="button" class="sc-tab-switcher-option" role="option" data-tab="related">
+              <span class="sc-tab-switcher-check" aria-hidden="true">✓</span>
+              <span>Related</span>
+            </button>
+            <p class="sc-tab-switcher-note" hidden>Only on <a href="#" class="sc-tab-switcher-link">whitelisted</a> sites</p>
+          </div>
         </span>
       </h2>
       <ul class="sc-list" id="historyList">
@@ -1715,6 +2082,23 @@ body.is-settings .sc-search { display: none; }
           <button class="sc-section-tab" role="tab" aria-selected="false">Related</button>
           <button class="sc-section-tab is-active" role="tab" aria-selected="true">Latest</button>
         </span>
+        <span class="sc-tab-switcher">
+          <button type="button" class="sc-tab-switcher-btn" aria-haspopup="listbox" aria-expanded="false">
+            <span class="sc-tab-switcher-label">Latest</span>
+            <svg class="sc-tab-switcher-chevron" viewBox="0 0 8 8" width="8" height="8" aria-hidden="true"><path d="M1 2.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="sc-tab-switcher-panel" role="listbox" hidden>
+            <button type="button" class="sc-tab-switcher-option" role="option" data-tab="latest">
+              <span class="sc-tab-switcher-check" aria-hidden="true">✓</span>
+              <span>Latest</span>
+            </button>
+            <button type="button" class="sc-tab-switcher-option" role="option" data-tab="related">
+              <span class="sc-tab-switcher-check" aria-hidden="true">✓</span>
+              <span>Related</span>
+            </button>
+            <p class="sc-tab-switcher-note" hidden>Only on <a href="#" class="sc-tab-switcher-link">whitelisted</a> sites</p>
+          </div>
+        </span>
       </h2>
       <ul class="sc-list" id="firefoxRelatedList" hidden></ul>
       <ul class="sc-list" id="firefoxList">
@@ -1735,6 +2119,7 @@ body.is-settings .sc-search { display: none; }
       </div>
       <button type="button" class="sc-show-more" aria-expanded="false">Show more</button>
     </section>
+
     <div class="sc-simulate-row">
       <button type="button" class="sc-simulate-link" data-action="simulate-dnf">Simulate domain not found</button>
     </div>
@@ -1754,7 +2139,7 @@ body.is-settings .sc-search { display: none; }
     </div>
 
     <section class="sc-section">
-      <h2>Suggested next searches</h2>
+      <h2>Search suggestions</h2>
       <div class="sc-slow-msg" id="digSimilarSlowMsg" aria-hidden="true">
         <span>Slow because</span>
         <span>prototype</span>
@@ -1768,6 +2153,10 @@ body.is-settings .sc-search { display: none; }
       <section class="sc-section sc-section--col">
         <h2>Multi-search</h2>
         <div class="sc-multi-list" id="multiList"></div>
+        <div class="sc-more">
+          <div class="sc-multi-list" id="multiMoreList"></div>
+        </div>
+        <button type="button" class="sc-show-more" id="multiShowMore" aria-expanded="false">Show more</button>
         <div class="sc-multi-actions">
           <button type="button" class="sc-btn-primary" id="multiBtn" data-action="multi-search">Open 6 as tab group</button>
           <div class="sc-multi-split">
@@ -1935,28 +2324,46 @@ body.is-settings .sc-search { display: none; }
 
   <div class="sc-content" id="tab-settings" role="tabpanel" aria-labelledby="tabbtn-settings" hidden>
     <section class="sc-section sc-section-plain" aria-label="Settings">
-      <h2 class="sc-settings-page-title">AI analysis settings</h2>
+      <div class="sc-settings-page-head">
+        <h2 class="sc-settings-page-title">AI suggestions</h2>
+        <div class="sc-theme-toggle" role="group" aria-label="Theme" id="themeToggle">
+          <button type="button" class="sc-theme-toggle-btn" data-theme="system" aria-label="System theme" title="System">
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="1.5" y="2.5" width="13" height="9" rx="1"/>
+              <path d="M5.5 14.5h5M8 11.5v3"/>
+            </svg>
+          </button>
+          <button type="button" class="sc-theme-toggle-btn" data-theme="light" aria-label="Light theme" title="Light">
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="8" cy="8" r="3"/>
+              <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06"/>
+            </svg>
+          </button>
+          <button type="button" class="sc-theme-toggle-btn" data-theme="dark" aria-label="Dark theme" title="Dark">
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M13.5 9.5A6 6 0 0 1 6.5 2.5a6 6 0 1 0 7 7Z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
       <div class="sc-settings-card">
         <label class="sc-settings-row">
-          <input type="checkbox" id="settingAiSuggest" checked />
-          <span>While searching</span>
+          <input type="checkbox" id="settingAiSuggest" checked disabled />
+          <span>While searching<span class="sc-settings-required">(required for prototype to work)</span></span>
         </label>
-        <p class="sc-settings-help">Searches you run throughout Firefox will be analysed by AI to provide relevant suggestions.</p>
-        <p class="sc-settings-help">If this is unchecked, suggestions for the hard-coded fallback of ‘wireless headphones’ will show instead.</p>
-        <p class="sc-settings-help"><button type="button" class="sc-settings-reset-btn" id="disclaimerResetBtn">Reset consent dialog</button></p>
+        <p class="sc-settings-help">Using any search input box will send your search term to an AI to generate suggestions.</p>
       </div>
 
       <div class="sc-settings-card">
         <label class="sc-settings-row">
           <input type="checkbox" id="settingPageSuggestions" />
-          <span>While browsing (with sidebar open)</span>
+          <span>While browsing whitelisted sites</span>
         </label>
-        <p class="sc-settings-help">Pages you visit with the sidebar open will be analysed by AI to provide relevant suggestions.</p>
-        <p class="sc-settings-help" id="browseConsentResetRow"><button type="button" class="sc-settings-reset-btn" id="browseConsentResetBtn" disabled>Reset consent dialog</button></p>
+        <p class="sc-settings-help">Allowed sites you visit with the sidebar open are analysed by AI to provide relevant suggestions.</p>
 
-        <div class="sc-settings-subcard">
-          <p class="sc-settings-label">Block these sites from page content analysis</p>
-          <p class="sc-settings-help">Add domains you'd rather not send to the AI. Each entry blocks the domain and any of its subdomains. Many email, collaboration tools, banking, and other categories are already blocked by default — this is for anything we've missed.</p>
+        <div class="sc-settings-subcard" id="allowedSitesCard">
+          <p class="sc-settings-label">Allow these sites for page content analysis</p>
+          <p class="sc-settings-help">Only pages on these domains are sent to the AI. Each entry covers the domain and its subdomains; ‘amazon.*’ matches any country domain (amazon.com, amazon.co.uk …).</p>
           <form class="sc-settings-domain-add" id="blockedDomainForm">
             <input type="text" id="blockedDomainInput" placeholder="example.com" autocomplete="off" spellcheck="false" />
             <button type="submit" class="sc-btn-secondary">Add</button>
@@ -1965,7 +2372,10 @@ body.is-settings .sc-search { display: none; }
         </div>
       </div>
 
-      <p class="sc-version" id="settingsVersion">—</p>
+      <div class="sc-settings-footer">
+        <button type="button" class="sc-settings-reset-btn" id="clearCacheBtn">Reset prototype</button>
+        <p class="sc-version" id="settingsVersion">—</p>
+      </div>
     </section>
   </div>
 
@@ -1999,8 +2409,8 @@ body.is-settings .sc-search { display: none; }
        entire sidebar; agreement is persisted in browser.storage.local. -->
   <div class="sc-disclaimer" id="disclaimerOverlay" role="dialog" aria-modal="true" aria-labelledby="disclaimerTitle" hidden>
     <div class="sc-disclaimer-card">
-      <h2 id="disclaimerTitle">Search term AI analysis</h2>
-      <p id="disclaimerMsg">Any real searches you do in Firefox while this prototype is open are sent to an AI model to generate simulated suggestions.</p>
+      <h2 id="disclaimerTitle">This prototype sends&nbsp;content&nbsp;to&nbsp;AI</h2>
+      <p id="disclaimerMsg">Suggestions will be generated based&nbsp;on the search terms you type.</p>
       <button type="button" id="disclaimerAgreeBtn" class="sc-disclaimer-agree">Agree</button>
     </div>
   </div>
@@ -2009,11 +2419,6 @@ body.is-settings .sc-search { display: none; }
     <button type="button" data-row-action="dig" role="menuitem">Dig deeper without searching</button>
     <button type="button" data-row-action="refine" role="menuitem">Refine this search</button>
     <button type="button" data-row-action="remove" role="menuitem">Remove suggestion</button>
-  </div>
-
-  <div class="sc-ff-tooltip" id="ffTooltip" hidden>
-    <span class="sc-ff-tooltip-title"></span>
-    <span class="sc-ff-tooltip-url"></span>
   </div>
 
   <script src="ai.js"></script>

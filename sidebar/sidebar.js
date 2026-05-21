@@ -13,17 +13,31 @@ const DISCLAIMER_AGREED_KEY = "disclaimerV2Agreed";
   if (!overlay || !btn) return;
 
   btn.addEventListener("click", async () => {
+    // One Agree covers everything: search-term and page-content analysis are
+    // both granted here. The domain allow-list (Settings) is what scopes
+    // page-content analysis now, so there's no separate per-surface consent.
     try {
       if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
-        await browser.storage.local.set({ [DISCLAIMER_AGREED_KEY]: true });
+        await browser.storage.local.set({
+          [DISCLAIMER_AGREED_KEY]: true,
+          browseConsentGiven: true,
+          settingPageSuggestions: true,
+        });
       } else {
         localStorage.setItem(DISCLAIMER_AGREED_KEY, "1");
+        localStorage.setItem("browseConsentGiven", "1");
+        localStorage.setItem("settingPageSuggestions", "1");
       }
     } catch (e) { /* swallow */ }
+    // Keep the Settings toggles coherent with what we just granted.
+    const pageCb = document.getElementById("settingPageSuggestions");
+    if (pageCb) pageCb.checked = true;
     overlay.hidden = true;
     document.body.classList.add("sc-content-ready");
     const resetBtn = document.getElementById("disclaimerResetBtn");
     if (resetBtn) resetBtn.disabled = false;
+    const bcReset = document.getElementById("browseConsentResetBtn");
+    if (bcReset) bcReset.disabled = false;
   });
 
   let agreed = false;
@@ -45,10 +59,33 @@ const DISCLAIMER_AGREED_KEY = "disclaimerV2Agreed";
   btn.focus();
 })();
 
-// Settings tab: list of user-added blocked domains. Lives in
-// storage.local.userBlockedDomains so the background script can read it
-// synchronously when deciding whether to send a page to the AI.
-const USER_BLOCKED_DOMAINS_KEY = "userBlockedDomains";
+// Settings tab: the allow-list. Page content is only sent to the AI when the
+// page's domain is on this list. Lives in storage.local.userAllowedDomains so
+// the background script can read it synchronously. Seeded on first run with
+// DEFAULT_ALLOWED_DOMAINS — keep this copy in lock-step with the one in
+// blocked-pages.js (entries ending ".*" match any public suffix).
+const USER_ALLOWED_DOMAINS_KEY = "userAllowedDomains";
+const DEFAULT_ALLOWED_DOMAINS = [
+  "amazon.*",
+  "walmart.*",
+  "target.com",
+  "bestbuy.*",
+  "costco.*",
+  "ebay.*",
+  "etsy.com",
+  "wayfair.*",
+  "ikea.com",
+  "newegg.*",
+  "homedepot.*",
+  "lowes.*",
+  "staples.*",
+  "canadiantire.ca",
+  "thebay.com",
+  "bhphotovideo.com",
+  "argos.co.uk",
+  "johnlewis.com",
+  "currys.co.uk",
+];
 
 function normaliseHostname(s) {
   let v = String(s || "").trim().toLowerCase();
@@ -63,7 +100,7 @@ function isValidHostname(s) {
   return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(s);
 }
 
-(async function setupBlockedDomainsUI() {
+(async function setupAllowedDomainsUI() {
   const form = document.getElementById("blockedDomainForm");
   const input = document.getElementById("blockedDomainInput");
   const list = document.getElementById("blockedDomainList");
@@ -72,23 +109,33 @@ function isValidHostname(s) {
   let domains = [];
 
   async function load() {
+    // Absent key = never seeded → fall back to the defaults and persist them
+    // so they render as editable, removable entries. An explicitly empty
+    // array is respected (the user removed everything on purpose).
+    let stored;
     try {
       if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
-        const data = await browser.storage.local.get(USER_BLOCKED_DOMAINS_KEY);
-        domains = Array.isArray(data[USER_BLOCKED_DOMAINS_KEY]) ? data[USER_BLOCKED_DOMAINS_KEY] : [];
+        const data = await browser.storage.local.get(USER_ALLOWED_DOMAINS_KEY);
+        stored = data[USER_ALLOWED_DOMAINS_KEY];
       } else {
-        const raw = localStorage.getItem(USER_BLOCKED_DOMAINS_KEY);
-        domains = raw ? JSON.parse(raw) : [];
+        const raw = localStorage.getItem(USER_ALLOWED_DOMAINS_KEY);
+        stored = raw ? JSON.parse(raw) : undefined;
       }
-    } catch (e) { domains = []; }
+    } catch (e) { stored = undefined; }
+    if (Array.isArray(stored)) {
+      domains = stored;
+    } else {
+      domains = DEFAULT_ALLOWED_DOMAINS.slice();
+      await save();
+    }
   }
 
   async function save() {
     try {
       if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
-        await browser.storage.local.set({ [USER_BLOCKED_DOMAINS_KEY]: domains });
+        await browser.storage.local.set({ [USER_ALLOWED_DOMAINS_KEY]: domains });
       } else {
-        localStorage.setItem(USER_BLOCKED_DOMAINS_KEY, JSON.stringify(domains));
+        localStorage.setItem(USER_ALLOWED_DOMAINS_KEY, JSON.stringify(domains));
       }
     } catch (e) {}
   }
@@ -137,7 +184,7 @@ function isValidHostname(s) {
   // future remote sync).
   if (typeof browser !== "undefined" && browser.storage && browser.storage.onChanged) {
     browser.storage.onChanged.addListener((changes, area) => {
-      if (area !== "local" || !changes[USER_BLOCKED_DOMAINS_KEY]) return;
+      if (area !== "local" || !changes[USER_ALLOWED_DOMAINS_KEY]) return;
       load().then(render);
     });
   }
@@ -206,7 +253,7 @@ function isValidHostname(s) {
   });
 })();
 
-// Suggestions mode dropdown — inline control in the "Suggested next searches"
+// Suggestions mode dropdown — inline control in the "Search suggestions"
 // heading that mirrors the settingPageSuggestions flag. "While searching" = off,
 // "Searching & browsing" = on. Kept in sync with the settings-page checkbox.
 // Switching to "Searching & browsing" for the first time shows a consent popup.
@@ -244,7 +291,7 @@ function showConsentPopup(source) {
   if (!consentPopup) return;
   consentPopupSource = source || "suggestions";
   if (consentPopupSource === "history") {
-    const historySection = document.querySelector('section[aria-label="From your search history"]');
+    const historySection = document.querySelector('section[aria-label="Your search history"]');
     if (historySection) historySection.appendChild(consentPopup);
     renderHistoryRelatedSkeleton();
   } else if (consentPopupSource === "firefox") {
@@ -269,78 +316,18 @@ function hideConsentPopup() {
   consentPopup.hidden = true;
 }
 
-(async function setupSuggestionsModeDropdown() {
-  const sel = document.getElementById("suggestionsMode");
-  const cb = document.getElementById("settingPageSuggestions");
-  if (!sel) return;
-
-  async function readSetting() {
-    try {
-      if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
-        const d = await browser.storage.local.get("settingPageSuggestions");
-        return d.settingPageSuggestions === true;
-      }
-      return localStorage.getItem("settingPageSuggestions") === "1";
-    } catch (e) { return false; }
-  }
-
-  async function writeSetting(value) {
-    try {
-      if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
-        await browser.storage.local.set({ settingPageSuggestions: value });
-      } else {
-        localStorage.setItem("settingPageSuggestions", value ? "1" : "0");
-      }
-    } catch (e) {}
-  }
-
-  // If the setting is already on at startup, treat consent as already given.
-  const alreadyOn = await readSetting();
-  if (alreadyOn) {
-    await writeConsent();
-  }
-  sel.value = alreadyOn ? "browse" : "search";
-
-  sel.addEventListener("change", async () => {
-    const on = sel.value === "browse";
-    if (on && !(await hasConsented())) {
-      showConsentPopup("suggestions");
-      return;
-    }
-    const popupWasOpen = !!(consentPopup && consentPopup.classList.contains("is-visible"));
-    await writeSetting(on);
-    if (cb) cb.checked = on;
-    hideConsentPopup();
-    if (!on && popupWasOpen) {
-      currentSuggKind = "";
-      currentSuggSourceKey = "";
-      try { syncFromActiveTab(); } catch (e) {}
-    } else if (!on && (currentSuggKind === "page" || currentSuggKind === "blocked")) {
-      showFrozenOrStatic();
-    } else if (on) {
-      try { syncFromActiveTab(); } catch (e) {}
-    }
-  });
-
+// Consent popup wiring. Used by the History "Related" tab and the Firefox
+// "Related" tab when they need consent. The old "suggestions" source — the
+// dropdown that toggled between "While searching" and "Searching & browsing"
+// — is gone; the whitelist controls page-content scoping instead, and the
+// disclaimer's Agree button grants consent up front.
+(function setupConsentPopup() {
   if (consentAgreeBtn) {
     consentAgreeBtn.addEventListener("click", async () => {
       await writeConsent();
       hideConsentPopup();
-      if (consentPopupSource === "history") {
-        // Consent came from the history Related tab — just fetch; don't touch
-        // the suggestions panel's mode setting.
-        renderHistoryRelated();
-      } else if (consentPopupSource === "firefox") {
-        // Consent came from the Firefox Related tab — just fetch.
-        renderFirefoxRelated();
-      } else {
-        await writeSetting(true);
-        if (cb) cb.checked = true;
-        sel.value = "browse";
-        const resetBtn = document.getElementById("browseConsentResetBtn");
-        if (resetBtn) resetBtn.disabled = false;
-        try { syncFromActiveTab(); } catch (e) {}
-      }
+      if (consentPopupSource === "history") renderHistoryRelated();
+      else if (consentPopupSource === "firefox") renderFirefoxRelated();
     });
   }
 
@@ -349,7 +336,7 @@ function hideConsentPopup() {
       hideConsentPopup();
       if (consentPopupSource === "history") {
         // Revert the history section back to the Latest tab.
-        const histSect = document.querySelector('section[aria-label="From your search history"]');
+        const histSect = document.querySelector('section[aria-label="Your search history"]');
         if (histSect) {
           histSect.querySelectorAll(".sc-section-tab").forEach((t) => {
             const isLatest = t.textContent.trim() === "Latest";
@@ -373,20 +360,7 @@ function hideConsentPopup() {
           if (firefoxListEl) firefoxListEl.hidden = false;
           renderFirefoxList();
         }
-      } else {
-        sel.value = "search";
-        if (cb) cb.checked = false;
-        currentSuggKind = "";
-        currentSuggSourceKey = "";
-        try { syncFromActiveTab(); } catch (e) {}
       }
-    });
-  }
-
-  // Keep dropdown in sync when the settings-page checkbox changes.
-  if (cb) {
-    cb.addEventListener("change", () => {
-      sel.value = cb.checked ? "browse" : "search";
     });
   }
 })();
@@ -651,7 +625,13 @@ tabs.forEach((tab) => {
 
 const content = document.body;
 
-// Search engines available in the switcher dropdown.
+// Search engines available in the switcher dropdown and the Dig Deeper
+// Multi-search list. The three shopping additions (Target/Best Buy/Walmart)
+// render as coloured circles with their initial — see letterCircleIcon —
+// rather than chasing brand-mark SVGs.
+function letterCircleIcon(letter, fill) {
+  return `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="${fill}"/><text x="12" y="16.5" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#fff">${letter}</text></svg>`;
+}
 const ENGINES = [
   {
     id: "google",
@@ -724,6 +704,33 @@ const ENGINES = [
     serpParam: "q",
     icon: `<svg viewBox="0 0 24 24"><path fill="#1FB8CD" d="M22.398 7.09h-2.31V.067l-7.51 6.355V.158h-1.155v6.196L4.49 0v7.09H1.602v10.397h2.888V24l6.932-6.359v6.2h1.156v-6.046l6.932 6.18v-6.488h2.888V7.09zm-3.466-4.531v4.531h-5.355l5.355-4.531zM5.646 2.626l4.87 4.464H5.646V2.626zM2.758 16.332V8.245h7.847l-6.114 6.115v1.972H2.758zm2.888 5.04v-3.885h.001v-2.649l5.776-5.776v7.011L5.646 21.37zm12.708.025-5.777-5.151V9.062l5.777 5.776v6.559zm2.888-5.065h-1.733v-1.972L13.395 8.245h7.847v8.087z"/></svg>`,
   },
+  {
+    id: "target",
+    name: "Target",
+    placeholder: "Search Target",
+    url: (q) => "https://www.target.com/s?searchTerm=" + encodeURIComponent(q),
+    serpRe: /^https?:\/\/(www\.)?target\.com\/s\b/i,
+    serpParam: "searchTerm",
+    icon: letterCircleIcon("T", "#CC0000"),
+  },
+  {
+    id: "bestbuy",
+    name: "Best Buy",
+    placeholder: "Search Best Buy",
+    url: (q) => "https://www.bestbuy.com/site/searchpage.jsp?st=" + encodeURIComponent(q),
+    serpRe: /^https?:\/\/(www\.)?bestbuy\.com\/site\/searchpage\.jsp\b/i,
+    serpParam: "st",
+    icon: letterCircleIcon("B", "#0046BE"),
+  },
+  {
+    id: "walmart",
+    name: "Walmart",
+    placeholder: "Search Walmart",
+    url: (q) => "https://www.walmart.com/search?q=" + encodeURIComponent(q),
+    serpRe: /^https?:\/\/(www\.)?walmart\.com\/search\b/i,
+    serpParam: "q",
+    icon: letterCircleIcon("W", "#0071CE"),
+  },
 ];
 
 let currentEngine = ENGINES[0];
@@ -761,20 +768,31 @@ function setPanelOpen(open) {
 
 setEngine("google");
 
-// Multi-search: render the list of engines as checkboxes, all on by default,
-// and keep the primary button's label in sync with how many are selected.
+// Multi-search: shopping engines render as checkboxes in the main list
+// (checked by default); the remaining engines are tucked behind "Show more"
+// and start unchecked, so the prototype defaults to firing the shopping
+// search rather than a generic web search.
+const SHOPPING_ENGINE_IDS = new Set(["amazon", "target", "bestbuy", "walmart"]);
+const shoppingEngines = ENGINES.filter((e) => SHOPPING_ENGINE_IDS.has(e.id));
+const otherEngines = ENGINES.filter((e) => !SHOPPING_ENGINE_IDS.has(e.id));
+
 const multiList = document.getElementById("multiList");
+const multiMoreList = document.getElementById("multiMoreList");
 const multiBtn = document.getElementById("multiBtn");
 const multiSplitBtn = document.getElementById("multiSplitBtn");
-const multiSelected = new Set(ENGINES.map((e) => e.id));
+const multiSelected = new Set(shoppingEngines.map((e) => e.id));
 
-multiList.innerHTML = ENGINES.map((e) => `
-  <label class="sc-multi-item">
-    <span class="sc-engine-mini" aria-hidden="true">${e.icon}</span>
-    <span class="sc-multi-name">${e.name}</span>
-    <input type="checkbox" data-engine="${e.id}" checked />
-  </label>
-`).join("");
+function renderMultiItem(e, checked) {
+  return `
+    <label class="sc-multi-item">
+      <span class="sc-engine-mini" aria-hidden="true">${e.icon}</span>
+      <span class="sc-multi-name">${e.name}</span>
+      <input type="checkbox" data-engine="${e.id}"${checked ? " checked" : ""} />
+    </label>
+  `;
+}
+multiList.innerHTML = shoppingEngines.map((e) => renderMultiItem(e, true)).join("");
+if (multiMoreList) multiMoreList.innerHTML = otherEngines.map((e) => renderMultiItem(e, false)).join("");
 
 function updateMultiBtn() {
   const n = multiSelected.size;
@@ -789,13 +807,15 @@ function updateMultiBtn() {
 }
 updateMultiBtn();
 
-multiList.addEventListener("change", (e) => {
-  const cb = e.target.closest('input[type="checkbox"]');
+function onMultiChange(ev) {
+  const cb = ev.target.closest('input[type="checkbox"]');
   if (!cb) return;
   if (cb.checked) multiSelected.add(cb.dataset.engine);
   else multiSelected.delete(cb.dataset.engine);
   updateMultiBtn();
-});
+}
+multiList.addEventListener("change", onMultiChange);
+if (multiMoreList) multiMoreList.addEventListener("change", onMultiChange);
 
 engineSwitcherBtn.addEventListener("click", (e) => {
   e.stopPropagation();
@@ -972,6 +992,67 @@ function relativeTime(ts) {
   return new Date(ts).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
 }
 
+// "You last visited..." phrasing for the Firefox section hover swap. Reads as
+// a natural sentence regardless of which relative-time bucket the visit falls
+// in. Visits older than a month switch to "…on {date}" so a specific time
+// ago stops feeling meaningful.
+function formatVisitTime(ts) {
+  if (!ts) return "";
+  const now = Date.now();
+  const diff = Math.max(0, now - ts);
+  const m = 60 * 1000, h = 60 * m, d = 24 * h;
+  if (diff < 2 * m) return "You visited just now";
+  if (diff < h) return `You last visited ${Math.max(2, Math.round(diff / m))} mins ago`;
+  if (diff < d) {
+    const hh = Math.round(diff / h);
+    return hh <= 1 ? "You last visited 1 hour ago" : `You last visited ${hh} hours ago`;
+  }
+  const days = Math.floor(diff / d);
+  if (days === 1) return "You last visited yesterday";
+  if (days < 7) {
+    const weekday = new Date(ts).toLocaleDateString("en-GB", { weekday: "long" });
+    return `You last visited on ${weekday}`;
+  }
+  if (days < 14) return "You last visited last week";
+  if (days < 21) return "You last visited 2 weeks ago";
+  if (days < 30) return "You last visited 3 weeks ago";
+  const d2 = new Date(ts);
+  const sameYear = d2.getFullYear() === new Date().getFullYear();
+  const fmt = sameYear
+    ? { day: "numeric", month: "long" }
+    : { day: "numeric", month: "long", year: "numeric" };
+  return `You last visited…on ${d2.toLocaleDateString(undefined, fmt)}`;
+}
+
+// Build the .sc-meta span for Firefox items. The URL shows by default and
+// fades out at the right; the timestamp (or pool source label) takes its place
+// on hover.
+// Build the `<img>` favicon for a Firefox-section row. Google's s2 service is
+// used because it has the broadest coverage and returns a consistently sized
+// PNG (`sz=32` for retina sharpness, rendered at 16px). Items without a URL
+// (fake AI suggestions in the Related tab) get a generic globe placeholder so
+// the row reads as "web result, unknown site" rather than a blank gap.
+function faviconImgFor(url) {
+  if (!url) return faviconPlaceholderHtml();
+  let host = "";
+  try { host = new URL(url).hostname; } catch {}
+  if (!host) return faviconPlaceholderHtml();
+  const src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32`;
+  return `<img class="sc-favicon" src="${escapeAttr(src)}" alt="" width="16" height="16" loading="lazy" referrerpolicy="no-referrer" />`;
+}
+function faviconPlaceholderHtml() {
+  return `<span class="sc-favicon sc-favicon--placeholder" aria-hidden="true"><svg viewBox="0 0 16 16" width="16" height="16"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M1 8h14M8 1c2.6 2 2.6 12 0 14M8 1c-2.6 2-2.6 12 0 14" fill="none" stroke="currentColor" stroke-width="1.1"/></svg></span>`;
+}
+
+function firefoxMetaHtml({ url, ts, sourceLabel }) {
+  const urlSpan = url ? `<span class="sc-meta-url">${escapeAttr(url)}</span>` : "";
+  let hoverText = "";
+  if (ts) hoverText = formatVisitTime(ts);
+  else if (sourceLabel) hoverText = sourceLabel;
+  const tsSpan = hoverText ? `<span class="sc-meta-ts">${escapeAttr(hoverText)}</span>` : "";
+  return `<span class="sc-meta">${urlSpan}${tsSpan}</span>`;
+}
+
 async function loadStoredHistory() {
   try {
     if (typeof browser === "undefined" || !browser.storage || !browser.storage.local) return [];
@@ -1028,7 +1109,7 @@ async function initHistory() {
   try {
     const d = await browser.storage.local.get("historyActiveTab");
     if (d && d.historyActiveTab === "related") {
-      const section = document.querySelector('section[aria-label="From your search history"]');
+      const section = document.querySelector('section[aria-label="Your search history"]');
       if (section) {
         section.querySelectorAll(".sc-section-tab").forEach((t) => {
           const isRelated = t.textContent.trim() === "Related";
@@ -1043,26 +1124,31 @@ async function initHistory() {
   renderHistory();
 
   // Restore Firefox section tab state independently of the search history tab.
+  // Default is Latest; "related" in storage means the user explicitly chose to
+  // pin the Related tab.
   try {
     const fd = await browser.storage.local.get("firefoxActiveTab");
+    const ffSection = document.querySelector('section[aria-label="From Firefox"]');
+    if (!ffSection) return;
     if (fd && fd.firefoxActiveTab === "related") {
-      const ffSection = document.querySelector('section[aria-label="From Firefox"]');
-      if (ffSection) {
-        ffSection.querySelectorAll(".sc-section-tab").forEach((t) => {
-          const isRelated = t.textContent.trim() === "Related";
-          t.classList.toggle("is-active", isRelated);
-          t.setAttribute("aria-selected", isRelated ? "true" : "false");
-        });
-        const firefoxListEl = document.getElementById("firefoxList");
-        if (firefoxListEl) firefoxListEl.hidden = true;
-        renderFirefoxRelated();
-      }
+      ffSection.querySelectorAll(".sc-section-tab").forEach((t) => {
+        const isRelated = t.textContent.trim() === "Related";
+        t.classList.toggle("is-active", isRelated);
+        t.setAttribute("aria-selected", isRelated ? "true" : "false");
+      });
+      const firefoxListEl = document.getElementById("firefoxList");
+      if (firefoxListEl) firefoxListEl.hidden = true;
+      const firefoxRelatedListEl = document.getElementById("firefoxRelatedList");
+      if (firefoxRelatedListEl) firefoxRelatedListEl.hidden = false;
+      renderFirefoxRelated();
     }
+    // else: default Latest — HTML already shows it and renderFirefoxList()
+    // runs unconditionally at module load.
   } catch {}
 }
 
 function isHistoryRelatedTabActive() {
-  const section = document.querySelector('section[aria-label="From your search history"]');
+  const section = document.querySelector('section[aria-label="Your search history"]');
   const activeTab = section && section.querySelector('.sc-section-tab[aria-selected="true"]');
   return !!(activeTab && activeTab.textContent.trim() === "Related");
 }
@@ -1419,17 +1505,14 @@ async function renderFirefoxRelated() {
   }
 
   relatedListEl.innerHTML = items.map(({ url, title, ts, fake }) => {
-    const displayTs = relativeTime(ts);
-    const domain = url ? (new URL(url).hostname.replace(/^www\./, "")) : "";
-    const meta = domain ? `${domain} · ${displayTs}` : displayTs;
     if (url) {
-      return `<li><a href="${escapeAttr(url)}"><span class="sc-title">${escapeAttr(title)}</span><span class="sc-meta">${escapeAttr(meta)}</span></a></li>`;
+      return `<li><a href="${escapeAttr(url)}">${faviconImgFor(url)}<span class="sc-title">${escapeAttr(title)}</span>${firefoxMetaHtml({ url, ts })}</a></li>`;
     }
-    // Fake item: clicking searches for the title
-    return `<li><a href="#" data-q="${escapeAttr(title)}"><span class="sc-title">${escapeAttr(title)}</span><span class="sc-meta">${escapeAttr(displayTs)}</span></a></li>`;
+    // Fake item without a real page to navigate to — clicking searches for
+    // the title. No URL to fade in/out, so just show the visit text.
+    return `<li><a href="#" data-q="${escapeAttr(title)}">${faviconImgFor(null)}<span class="sc-title">${escapeAttr(title)}</span><span class="sc-meta"><span class="sc-meta-ts">${escapeAttr(formatVisitTime(ts))}</span></span></a></li>`;
   }).join("");
 
-  relatedListEl.querySelectorAll("a > .sc-meta").forEach((meta) => meta.parentElement.after(meta));
   relatedListEl.querySelectorAll("li").forEach(injectRowMenu);
   _sclog("firefox-related rendering", items.length, "items:", items.map(({ title, fake, url }) => ({ title: title.slice(0, 40), fake: !!fake, hasUrl: !!url })));
   setupRovingTabindex();
@@ -1449,12 +1532,8 @@ function renderHistory() {
   const moreBtn = section && section.querySelector(".sc-show-more");
   const item = (e) =>
     `<li><a href="#" data-q="${escapeAttr(e.q)}"><span class="sc-title">${escapeAttr(e.q)}</span><span class="sc-meta">${escapeAttr(relativeTime(e.ts))}</span></a></li>`;
-  const currentQ = typeof currentPageContext === "string" ? currentPageContext.trim().toLowerCase() : "";
-  const visibleEntries = currentQ
-    ? historyEntries.filter((e) => String(e.q || "").toLowerCase() !== currentQ)
-    : historyEntries;
-  historyListEl.innerHTML = visibleEntries.slice(0, 5).map(item).join("");
-  if (moreList) moreList.innerHTML = visibleEntries.slice(5, 12).map(item).join("");
+  historyListEl.innerHTML = historyEntries.slice(0, 5).map(item).join("");
+  if (moreList) moreList.innerHTML = historyEntries.slice(5, 12).map(item).join("");
   // Restore show-more visibility (may have been hidden by renderHistoryRelated).
   if (moreWrap) { moreWrap.removeAttribute("hidden"); moreWrap.inert = true; }
   if (moreBtn) moreBtn.hidden = historyEntries.length <= 5;
@@ -1535,13 +1614,14 @@ async function renderFirefoxList() {
     .slice(0, Math.max(0, 12 - realVisits.length));
   const picks = [...realVisits.slice(0, 12), ...poolPadding].slice(0, 12);
 
-  const realItem = ({ url, title, ts }) => {
-    const domain = url ? (new URL(url).hostname.replace(/^www\./, "")) : "";
-    const meta = domain ? `${domain} · ${relativeTime(ts)}` : relativeTime(ts);
-    return `<li><a href="${escapeAttr(url)}"><span class="sc-title">${escapeAttr(title)}</span><span class="sc-meta">${escapeAttr(meta)}</span></a></li>`;
+  const realItem = ({ url, title, ts }) =>
+    `<li><a href="${escapeAttr(url)}">${faviconImgFor(url)}<span class="sc-title">${escapeAttr(title)}</span>${firefoxMetaHtml({ url, ts })}</a></li>`;
+  const poolItem = ({ url, title, meta }) => {
+    // Pool meta is "domain.com · Label" — drop the domain prefix so the hover
+    // text reads as just the source descriptor ("Bookmark", "Open tab" …).
+    const sourceLabel = (meta || "").includes(" · ") ? meta.split(" · ").slice(1).join(" · ") : (meta || "");
+    return `<li><a href="${escapeAttr(url)}">${faviconImgFor(url)}<span class="sc-title">${escapeAttr(title)}</span>${firefoxMetaHtml({ url, sourceLabel })}</a></li>`;
   };
-  const poolItem = ({ url, title, meta }) =>
-    `<li><a href="${escapeAttr(url)}"><span class="sc-title">${escapeAttr(title)}</span><span class="sc-meta">${escapeAttr(meta)}</span></a></li>`;
 
   const renderItem = (e) => (e.ts !== undefined && !e.meta) ? realItem(e) : poolItem(e);
 
@@ -1552,9 +1632,6 @@ async function renderFirefoxList() {
     if (moreWrap) { moreWrap.hidden = !hasMore; moreWrap.inert = hasMore ? false : true; }
     if (moreBtn) moreBtn.hidden = !hasMore;
   }
-  section.querySelectorAll(".sc-list a > .sc-meta").forEach((meta) => {
-    meta.parentElement.after(meta);
-  });
   section.querySelectorAll(".sc-list li").forEach(injectRowMenu);
   setupRovingTabindex();
 }
@@ -1742,7 +1819,7 @@ function setBlockedMessage(visible) {
   el.classList.toggle("is-visible", !!visible);
 }
 
-// Right-aligned source label inside the "Suggested next searches" heading.
+// Right-aligned source label inside the "Search suggestions" heading.
 // Two strings only: page-derived suggestions vs SERP-derived (including the
 // frozen fallback that surfaces the last SERP list). Hidden in blocked /
 // empty / static-demo states because there's no real source to credit.
@@ -1773,6 +1850,7 @@ function showFrozenOrStatic() {
   currentSuggKind = "frozen";
   currentSuggSourceKey = "";
   currentSuggQuery = "";
+  updateRelatedTabsAvailability();
   if (lastSerpSuggestions && lastSerpSuggestions.length) {
     suggestionsSection.hidden = false;
     renderSuggestions(lastSerpSuggestions);
@@ -1828,6 +1906,206 @@ async function persistLastSerp(list) {
 })();
 
 
+// The "Related" tab (in both From Firefox and Your search history) is derived
+// from the current page's content, which is only sent to the AI on allow-
+// listed domains. Off such a domain there's nothing to relate to, so the tab
+// is hidden entirely and the section falls back to Latest. Whitelisted ⇔
+// currentSuggKind === "page" (a page-context, not a SERP/blocked/frozen state).
+// Per-URL "user clicked Analyze now" memory. In-session only — navigating
+// back to a previously-analyzed blocked URL re-shows the Related badge
+// without making them click again, but a sidebar reload resets this.
+const analyzedBlockedUrls = new Set();
+
+// URL of the last page whose page-suggestions rendered to the panel. Used
+// to delay showing the "Related ✓ •••" header chrome until results land,
+// instead of flashing it during the skeleton/load.
+let pageSuggestionsRenderedForUrl = "";
+
+(function setupAnalyzeNow() {
+  const btn = document.getElementById("suggestionsAnalyzeBtn");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    if (currentSuggKind !== "blocked") return;
+    const url = currentSuggSourceKey;
+    btn.disabled = true;
+    btn.textContent = "Analyzing…";
+    // Try to grab the active tab's title and (where allowed) page text so
+    // the AI gets more than just a URL. The domain itself is NOT added to
+    // the allow-list — this is a one-page opt-in. The ••• menu that
+    // appears alongside the badge offers a permanent whitelist if the
+    // user wants it.
+    let title = "";
+    let text = "";
+    try {
+      if (typeof browser !== "undefined" && browser.tabs) {
+        const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+        if (tab) {
+          title = tab.title || "";
+          try {
+            const ctx = await browser.tabs.sendMessage(tab.id, { type: "extract-page-context" });
+            if (ctx) {
+              title = ctx.title || title;
+              text = ctx.text || "";
+            }
+          } catch { /* content script not ready or blocked */ }
+        }
+      }
+    } catch { /* tabs API unavailable */ }
+    analyzedBlockedUrls.add(url);
+    // Drive the standard page-suggestions flow. setSuggestionsActive will
+    // call updateRelatedTabsAvailability internally, which sees the URL in
+    // analyzedBlockedUrls and shows the badge + ••• menu.
+    setSuggestionsActive({ kind: "page", url, title, text });
+  });
+})();
+
+// "•••" menu next to the Related badge after an Analyze-now opt-in.
+(function setupRelatedMenu() {
+  const wrap = document.getElementById("suggestionsRelatedMenu");
+  if (!wrap) return;
+  const trigger = wrap.querySelector(".sc-related-menu-trigger");
+  const popup = wrap.querySelector(".sc-related-menu-popup");
+  const whitelistItem = wrap.querySelector('[data-action="whitelist"]');
+  if (!trigger || !popup) return;
+
+  function open() { popup.hidden = false; trigger.setAttribute("aria-expanded", "true"); }
+  function close() { popup.hidden = true; trigger.setAttribute("aria-expanded", "false"); }
+
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    popup.hidden ? open() : close();
+  });
+  document.addEventListener("click", (e) => {
+    if (popup.hidden) return;
+    if (!wrap.contains(e.target)) close();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !popup.hidden) close();
+  });
+
+  // "Whitelist this site for analysis" — adds the current page's hostname
+  // to the user-editable allow-list. After this, the site will be treated
+  // as whitelisted for all future navigations (without the user having to
+  // click Analyze now again).
+  if (whitelistItem) {
+    whitelistItem.addEventListener("click", async () => {
+      const url = currentSuggSourceKey;
+      let host = "";
+      try { host = new URL(url).hostname.replace(/^www\./, "").toLowerCase(); } catch {}
+      if (!host) { close(); return; }
+      let list = [];
+      try {
+        if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
+          const d = await browser.storage.local.get(USER_ALLOWED_DOMAINS_KEY);
+          list = Array.isArray(d[USER_ALLOWED_DOMAINS_KEY]) ? d[USER_ALLOWED_DOMAINS_KEY] : [];
+        } else {
+          const raw = localStorage.getItem(USER_ALLOWED_DOMAINS_KEY);
+          list = raw ? JSON.parse(raw) : [];
+        }
+      } catch {}
+      if (!list.includes(host)) {
+        const next = [...list, host].sort();
+        try {
+          if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
+            await browser.storage.local.set({ [USER_ALLOWED_DOMAINS_KEY]: next });
+          } else {
+            localStorage.setItem(USER_ALLOWED_DOMAINS_KEY, JSON.stringify(next));
+          }
+        } catch {}
+      }
+      // Drop the "manually analyzed" flag for this URL — the site is now
+      // permanently whitelisted, so the ••• menu (which offers exactly
+      // this action) no longer needs to be there.
+      analyzedBlockedUrls.delete(url);
+      close();
+      updateRelatedTabsAvailability();
+    });
+  }
+})();
+
+function updateRelatedTabsAvailability() {
+  const onWhitelisted = currentSuggKind === "page";
+  const onBlocked = currentSuggKind === "blocked";
+  const onSerp = currentSuggKind === "query";
+  // "Manually analyzed" persists across the kind transition: after the user
+  // clicks Analyze now, setSuggestionsActive flips kind to "page" so the AI
+  // worker fires, but the badge/menu visibility needs to remember that this
+  // URL was opted in manually (so the menu offering permanent whitelisting
+  // stays visible). We track it by URL membership in analyzedBlockedUrls.
+  const wasManuallyAnalyzed = analyzedBlockedUrls.has(currentSuggSourceKey);
+  const suggestionsLanded = pageSuggestionsRenderedForUrl === currentSuggSourceKey;
+  // Badge shows when AI suggestions for the current context have landed —
+  // for SERPs in any of the engine-dropdown sites, for whitelisted content
+  // pages, or for blocked pages the user has manually opted into.
+  const showBadge = (onSerp || onWhitelisted || (onBlocked && wasManuallyAnalyzed)) && suggestionsLanded;
+  const showAnalyze = onBlocked && !wasManuallyAnalyzed;
+  // The ••• menu only makes sense on manually-analyzed blocked pages (it
+  // offers permanent whitelisting). SERPs don't get the menu.
+  const showMenu = wasManuallyAnalyzed && showBadge;
+
+  const relatedBadge = document.getElementById("suggestionsRelatedBadge");
+  if (relatedBadge) relatedBadge.hidden = !showBadge;
+  const analyzeBtn = document.getElementById("suggestionsAnalyzeBtn");
+  if (analyzeBtn) {
+    analyzeBtn.hidden = !showAnalyze;
+    if (showAnalyze) {
+      analyzeBtn.disabled = false;
+      analyzeBtn.textContent = "Analyze now";
+    }
+  }
+  const relatedMenu = document.getElementById("suggestionsRelatedMenu");
+  if (relatedMenu) {
+    relatedMenu.hidden = !showMenu;
+    if (showMenu) {
+      // Replace the "Whitelist this site for analysis" placeholder with the
+      // actual hostname (bolded) so the action reads as a concrete commitment.
+      const item = relatedMenu.querySelector('[data-action="whitelist"]');
+      if (item) {
+        let host = "";
+        try { host = new URL(currentSuggSourceKey).hostname.replace(/^www\./, ""); } catch {}
+        item.innerHTML = host
+          ? `Whitelist <strong>${escapeAttr(host)}</strong> for analysis`
+          : "Whitelist this site for analysis";
+      }
+    } else {
+      const popup = relatedMenu.querySelector(".sc-related-menu-popup");
+      if (popup) popup.hidden = true;
+      const trigger = relatedMenu.querySelector(".sc-related-menu-trigger");
+      if (trigger) trigger.setAttribute("aria-expanded", "false");
+    }
+  }
+  ["Your search history", "From Firefox"].forEach((label) => {
+    const section = document.querySelector(`section[aria-label="${label}"]`);
+    if (!section) return;
+    let relatedBtn = null, latestBtn = null;
+    section.querySelectorAll(".sc-section-tab").forEach((t) => {
+      const txt = t.textContent.trim();
+      if (txt === "Related") relatedBtn = t;
+      else if (txt === "Latest") latestBtn = t;
+    });
+    if (!relatedBtn || !latestBtn) return;
+    if (onWhitelisted) { relatedBtn.hidden = false; return; }
+
+    const relatedWasActive = relatedBtn.getAttribute("aria-selected") === "true";
+    relatedBtn.hidden = true;
+    if (!relatedWasActive) return;
+    // Related was showing — fall back to Latest for this section.
+    relatedBtn.classList.remove("is-active");
+    relatedBtn.setAttribute("aria-selected", "false");
+    latestBtn.classList.add("is-active");
+    latestBtn.setAttribute("aria-selected", "true");
+    if (label === "Your search history") {
+      renderHistory();
+    } else {
+      const firefoxRelatedListEl = document.getElementById("firefoxRelatedList");
+      const firefoxListEl = document.getElementById("firefoxList");
+      if (firefoxRelatedListEl) firefoxRelatedListEl.hidden = true;
+      if (firefoxListEl) firefoxListEl.hidden = false;
+      renderFirefoxList();
+    }
+  });
+}
+
 // Show, hide, or repopulate the suggestions section. Accepts either:
 //   • a non-empty string (treated as a SERP query)
 //   • { kind: "page", url, title, text } (page context)
@@ -1835,13 +2113,11 @@ async function persistLastSerp(list) {
 //   • null/empty (hide the section)
 function setSuggestionsActive(input) {
   if (!suggestionsSection) return;
-  const modeEl = document.getElementById("suggestionsMode");
-  const prevLabel = modeEl ? modeEl.value : "?";
   const prevKind = currentSuggKind || "(none)";
   const inputDesc = typeof input === "string" ? ("query:" + input.slice(0, 60))
     : (input && input.kind) ? (input.kind + ":" + (input.url || "").slice(0, 80))
     : String(input);
-  _sclog("[sugg] setSuggestionsActive", { input: inputDesc, prevKind, prevLabel });
+  _sclog("[sugg] setSuggestionsActive", { input: inputDesc, prevKind });
 
   if (typeof input === "string" && input.trim()) {
     suggestionsSection.hidden = false;
@@ -1859,6 +2135,7 @@ function setSuggestionsActive(input) {
     refreshFirefoxRelatedIfActive();
     setSuggestionsSourceLabel("query");
     loadSuggestions(input);
+    updateRelatedTabsAvailability();
     return;
   }
 
@@ -1874,21 +2151,20 @@ function setSuggestionsActive(input) {
     refreshFirefoxRelatedIfActive();
     setSuggestionsSourceLabel("page");
     loadPageSuggestions(input.url, input.title, input.text);
+    updateRelatedTabsAvailability();
     return;
   }
 
   if (input && typeof input === "object" && input.kind === "blocked" && input.url) {
-    suggestionsSection.hidden = false;
-    // "URL blocked for privacy" overlay over a static (non-shimmering)
-    // skeleton — reassures the user we didn't analyse this URL, without
-    // showing stale content underneath that could read as if we had.
+    // Non-whitelisted page: leave whatever is already in the suggestions
+    // section visible (frozen SERP suggestions, the last page-suggestions,
+    // or the static fallback) until the user navigates to a whitelisted
+    // page or runs another search. Just track state for the Related-tab
+    // gate; no UI churn, no privacy overlay.
     if (currentSuggKind === "blocked" && currentSuggSourceKey === input.url) return;
     currentSuggKind = "blocked";
     currentSuggSourceKey = input.url;
-    setSuggestionsSourceLabel("");
-    stopSlowHint("suggestionsSlowMsg", "suggestions");
-    renderSuggestionSkeleton(5, { static: true });
-    setBlockedMessage(true);
+    updateRelatedTabsAvailability();
     return;
   }
 
@@ -2011,6 +2287,10 @@ async function loadSuggestions(query) {
       persistLastSerp(list);
       renderSuggestions(list);
       SC_AI.prefetchSummaries(list);
+      // SERPs are recognised allow-listed contexts too — surface the
+      // "Related ✓" badge once the AI suggestions for this query land.
+      pageSuggestionsRenderedForUrl = query;
+      updateRelatedTabsAvailability();
     } else {
       restoreSuggestionsStatic();
     }
@@ -2056,6 +2336,11 @@ async function loadPageSuggestions(url, title, text) {
       renderSuggestions(list);
       SC_AI.prefetchSummaries(list);
       _sclog("rendered " + list.length + " page suggestions");
+      // Tell updateRelatedTabsAvailability that the suggestions for this
+      // URL have actually landed, so the "Related ✓ •••" header chrome can
+      // appear — we wait until results are in before showing the badge.
+      pageSuggestionsRenderedForUrl = url;
+      updateRelatedTabsAvailability();
     } else {
       _sclog("empty list → restoring static");
       restoreSuggestionsStatic();
@@ -2421,7 +2706,11 @@ browser.runtime.onMessage.addListener((msg) => {
 
 // Move any .sc-meta from inside the link to be a sibling of it inside the li,
 // so the row's hover state can hide the meta and reveal the menu in its place.
+// The whole From Firefox section is excluded — its items use a two-line grid
+// layout that keeps title and meta inside the <a> so the meta wraps below the
+// title (this covers Latest, Related, and the Show More overflow list).
 document.querySelectorAll(".sc-list a > .sc-meta").forEach((meta) => {
+  if (meta.closest('section[aria-label="From Firefox"]')) return;
   const a = meta.parentElement;
   a.after(meta);
 });
@@ -2499,7 +2788,7 @@ function showRowMenu(trigger, li) {
     // Both the visible history list and its "Show more" overflow sit inside
     // the section labelled "Search history", so a single closest() picks
     // either up regardless of which sublist the row is in.
-    const inHistory = !!(li && li.closest('section[aria-label="From your search history"]'));
+    const inHistory = !!(li && li.closest('section[aria-label="Your search history"]'));
     removeBtn.textContent = inHistory ? "Remove from prototype history" : "Remove suggestion";
   }
   const rect = trigger.getBoundingClientRect();
@@ -2517,14 +2806,17 @@ document.addEventListener("click", (e) => {
   const simulate = e.target.closest("[data-action='simulate-dnf']");
   if (simulate) {
     e.preventDefault();
+    // Default lands on the standalone no-consent DNF page (no split view).
+    // The page's "Consent given" footer link is what jumps to the split-view
+    // version with the simulated search results in the right pane.
     const base = (browser.runtime && browser.runtime.getURL)
-      ? browser.runtime.getURL("sidebar/split-view.html")
-      : "split-view.html";
+      ? browser.runtime.getURL("sidebar/sim.html")
+      : "sim.html";
     const p = new URLSearchParams({
+      kind: "firefox-dnf",
       q: "taarget",
-      left: "firefox-dnf",
-      right: "google-didyoumean",
       domain: "taarget.com",
+      consent: "none",
     });
     const url = base + "?" + p.toString();
     // Hand the navigation off to the background script so it can `await`
@@ -2581,7 +2873,7 @@ rowMenuPopup.addEventListener("click", (e) => {
     showRefineTip();
   } else if (action.dataset.rowAction === "remove") {
     const section = li.closest(".sc-section");
-    const inHistory = !!li.closest('section[aria-label="From your search history"]');
+    const inHistory = !!li.closest('section[aria-label="Your search history"]');
     if (inHistory && query) {
       const key = query.trim().toLowerCase();
       removedHistoryQueries.add(key);
@@ -2787,7 +3079,7 @@ document.querySelectorAll(".sc-section-tab").forEach((btn) => {
     if (!section) return;
     const isRelated = btn.textContent.trim() === "Related";
     const sectionLabel = section.getAttribute("aria-label");
-    if (sectionLabel === "From your search history") {
+    if (sectionLabel === "Your search history") {
       try { browser.storage.local.set({ historyActiveTab: isRelated ? "related" : "latest" }); } catch {}
       if (isRelated) renderHistoryRelated(); else renderHistory();
     } else if (sectionLabel === "From Firefox") {
@@ -2805,6 +3097,154 @@ document.querySelectorAll(".sc-section-tab").forEach((btn) => {
     }
   });
 });
+
+// The compact "Latest / Related" dropdown that replaced the old tab strip.
+// The hidden .sc-section-tabs buttons remain the source of truth — this
+// switcher just renders the current selection + a popup, and delegates clicks
+// to the underlying tab buttons so all the existing render/persist wiring
+// still runs. A MutationObserver keeps the switcher in sync when the active
+// tab changes from anywhere (option click, restore-from-storage,
+// updateRelatedTabsAvailability falling back to Latest, etc.).
+function setupTabSwitcher(section) {
+  const tablist = section.querySelector(".sc-section-tabs");
+  const switcher = section.querySelector(".sc-tab-switcher");
+  if (!tablist || !switcher) return;
+
+  const trigger = switcher.querySelector(".sc-tab-switcher-btn");
+  const triggerLabel = switcher.querySelector(".sc-tab-switcher-label");
+  const panel = switcher.querySelector(".sc-tab-switcher-panel");
+  const note = switcher.querySelector(".sc-tab-switcher-note");
+  const options = Array.from(switcher.querySelectorAll(".sc-tab-switcher-option"));
+  if (!trigger || !panel) return;
+
+  function tabsByLabel() {
+    const map = {};
+    tablist.querySelectorAll(".sc-section-tab").forEach((t) => {
+      map[t.textContent.trim().toLowerCase()] = t;
+    });
+    return map;
+  }
+
+  function sync() {
+    const tabs = tabsByLabel();
+    const relatedTab = tabs.related;
+    const activeBtn = tablist.querySelector('.sc-section-tab[aria-selected="true"]');
+    triggerLabel.textContent = activeBtn ? activeBtn.textContent.trim() : "Latest";
+    const relatedAllowed = !!(relatedTab && !relatedTab.hidden);
+    options.forEach((opt) => {
+      const which = opt.dataset.tab;
+      const tabBtn = tabs[which];
+      const isActive = !!(tabBtn && tabBtn.getAttribute("aria-selected") === "true");
+      opt.classList.toggle("is-active", isActive);
+      if (which === "related") opt.disabled = !relatedAllowed;
+    });
+    if (note) note.hidden = relatedAllowed;
+  }
+
+  function open() {
+    sync();
+    panel.hidden = false;
+    trigger.setAttribute("aria-expanded", "true");
+  }
+  function close() {
+    panel.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+  }
+
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    panel.hidden ? open() : close();
+  });
+
+  options.forEach((opt) => {
+    opt.addEventListener("click", () => {
+      if (opt.disabled) return;
+      const which = opt.dataset.tab;
+      const tabBtn = tabsByLabel()[which];
+      if (tabBtn) tabBtn.click();
+      close();
+    });
+  });
+
+  const link = note && note.querySelector(".sc-tab-switcher-link");
+  if (link) {
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const settingsBtn = document.getElementById("tabbtn-settings");
+      if (settingsBtn) settingsBtn.click();
+      const card = document.getElementById("allowedSitesCard");
+      if (card) requestAnimationFrame(() => card.scrollIntoView({ block: "start", behavior: "smooth" }));
+      close();
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    if (panel.hidden) return;
+    if (!switcher.contains(e.target)) close();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !panel.hidden) close();
+  });
+
+  new MutationObserver(sync).observe(tablist, {
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["aria-selected", "hidden"],
+  });
+
+  sync();
+}
+document.querySelectorAll("section.sc-section--tabbed").forEach(setupTabSwitcher);
+
+// 3-way theme toggle (light / system / dark). Sets a data-theme attribute on
+// <html> that overrides the prefers-color-scheme media query in the CSS, plus
+// the color-scheme CSS property so form controls and scrollbars follow suit.
+const THEME_PREFERENCE_KEY = "themePreference";
+(function setupThemeToggle() {
+  const toggle = document.getElementById("themeToggle");
+  if (!toggle) return;
+  const buttons = Array.from(toggle.querySelectorAll(".sc-theme-toggle-btn"));
+
+  function applyTheme(value) {
+    const html = document.documentElement;
+    if (value === "light" || value === "dark") {
+      html.setAttribute("data-theme", value);
+      html.style.colorScheme = value;
+    } else {
+      html.removeAttribute("data-theme");
+      html.style.colorScheme = "";
+    }
+    buttons.forEach((b) => b.classList.toggle("is-active", b.dataset.theme === (value || "system")));
+  }
+
+  (async () => {
+    let stored = null;
+    try {
+      if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
+        const d = await browser.storage.local.get(THEME_PREFERENCE_KEY);
+        stored = d[THEME_PREFERENCE_KEY];
+      } else {
+        stored = localStorage.getItem(THEME_PREFERENCE_KEY);
+      }
+    } catch {}
+    applyTheme(stored || "system");
+  })();
+
+  buttons.forEach((b) => {
+    b.addEventListener("click", async () => {
+      const v = b.dataset.theme;
+      applyTheme(v);
+      try {
+        if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
+          await browser.storage.local.set({ [THEME_PREFERENCE_KEY]: v });
+        } else {
+          localStorage.setItem(THEME_PREFERENCE_KEY, v);
+        }
+      } catch {}
+    });
+  });
+})();
 
 document.addEventListener("keydown", (e) => {
   if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -2831,6 +3271,39 @@ document.getElementById("disclaimerResetBtn")?.addEventListener("click", async f
   if (overlay) overlay.hidden = false;
 });
 
+// "Reset prototype" — wipes the entire prototype state: caches, history,
+// visit log, consent flags, settings, and tab preferences. On reload the
+// user sees the first-run disclaimer again and every section is back to its
+// initial defaults.
+document.getElementById("clearCacheBtn")?.addEventListener("click", async function() {
+  const PROTOTYPE_KEYS = [
+    // Accumulated data
+    "userHistory",
+    VISITED_PAGES_LOG_KEY,
+    RELATED_PAGE_TOPIC_CACHE_KEY,
+    "relatedTopicCache",
+    LAST_SERP_KEY,
+    // Consent + settings
+    DISCLAIMER_AGREED_KEY,
+    BROWSE_CONSENT_KEY,
+    "settingPageSuggestions",
+    USER_ALLOWED_DOMAINS_KEY,
+    // Tab preferences
+    "historyActiveTab",
+    "firefoxActiveTab",
+    THEME_PREFERENCE_KEY,
+  ];
+  if (window.SC_AI) {
+    [SC_AI.suggestionsCache, SC_AI.summaryCache, SC_AI.pageSuggestionsCache, SC_AI.relatedHistoryCache, SC_AI.relatedPagesCache]
+      .forEach((c) => { try { c && c.clear && c.clear(); } catch {} });
+  }
+  try { await browser.storage.local.remove(PROTOTYPE_KEYS); } catch {}
+  PROTOTYPE_KEYS.forEach((k) => { try { localStorage.removeItem(k); } catch {} });
+  this.textContent = "Reset";
+  this.disabled = true;
+  setTimeout(() => window.location.reload(), 600);
+});
+
 (async () => {
   let consented = false;
   try {
@@ -2848,8 +3321,6 @@ document.getElementById("disclaimerResetBtn")?.addEventListener("click", async f
     try { await browser.storage.local.remove([BROWSE_CONSENT_KEY, "settingPageSuggestions"]); } catch {}
     localStorage.removeItem(BROWSE_CONSENT_KEY);
     localStorage.removeItem("settingPageSuggestions");
-    const sel = document.getElementById("suggestionsMode");
-    if (sel) sel.value = "search";
     const cb = document.getElementById("settingPageSuggestions");
     if (cb) cb.checked = false;
     this.disabled = true;
@@ -2857,42 +3328,3 @@ document.getElementById("disclaimerResetBtn")?.addEventListener("click", async f
 })();
 
 syncFromActiveTab();
-
-// Custom tooltip for Firefox section items — shows full title and URL on hover.
-(function initFirefoxTooltip() {
-  const tooltip = document.getElementById("ffTooltip");
-  if (!tooltip) return;
-  const titleEl = tooltip.querySelector(".sc-ff-tooltip-title");
-  const urlEl = tooltip.querySelector(".sc-ff-tooltip-url");
-  const section = document.querySelector('section[aria-label="From Firefox"]');
-  if (!section) return;
-
-  section.addEventListener("mouseover", (e) => {
-    const li = e.target.closest("#firefoxList li, #firefoxRelatedList li");
-    if (!li) return;
-    const a = li.querySelector("a");
-    if (!a) return;
-    const title = (a.querySelector(".sc-title") || a).textContent.trim();
-    if (!title) return;
-    const href = a.getAttribute("href");
-    const url = href && href !== "#" ? href : null;
-
-    titleEl.textContent = title;
-    urlEl.textContent = url || "";
-    urlEl.hidden = !url;
-
-    tooltip.hidden = false;
-    const rect = li.getBoundingClientRect();
-    const left = Math.max(8, rect.left);
-    tooltip.style.left = left + "px";
-    tooltip.style.maxWidth = (window.innerWidth - left - 8) + "px";
-    const spaceBelow = window.innerHeight - rect.bottom;
-    if (spaceBelow < tooltip.offsetHeight + 8) {
-      tooltip.style.top = Math.max(8, rect.top - tooltip.offsetHeight - 4) + "px";
-    } else {
-      tooltip.style.top = (rect.bottom + 4) + "px";
-    }
-  });
-
-  section.addEventListener("mouseleave", () => { tooltip.hidden = true; });
-})();

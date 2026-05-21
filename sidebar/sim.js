@@ -12,6 +12,17 @@ const params = new URLSearchParams(location.search);
 const query = params.get("q") || "";
 const kind = params.get("kind") || "google";
 const domain = params.get("domain") || "";
+// "given" (default) shows the consent-enabled DNF view with the search form;
+// "none" shows the same page minus the search affordance.
+const consent = params.get("consent") === "none" ? "none" : "given";
+
+// URL builder used by the "Prototype view" footer link to swap variants
+// without disturbing the rest of the query string.
+function buildProtoViewHref(nextConsent) {
+  const next = new URLSearchParams(location.search);
+  next.set("consent", nextConsent);
+  return location.pathname + "?" + next.toString();
+}
 
 document.title = kind === "firefox-dnf"
   ? "Server Not Found. We’re having trouble finding that site"
@@ -391,14 +402,46 @@ function dnfBuilder() {
       .engine-mini svg { width: 14px; height: 14px; }
       .search input { flex: 1; min-width: 0; padding: 5px 4px 3px; font: inherit; font-size: 14px; color: #15141a; background: transparent; border: none; outline: none; }
       .search input::-webkit-search-cancel-button, .search input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
-      .submit { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; background: transparent; border: none; border-radius: 50%; color: #6b6b6b; cursor: pointer; }
-      .submit:hover { color: #0061e0; background: rgba(0,0,0,0.05); }
-      .clear { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; background: transparent; border: none; border-radius: 50%; color: #6b6b6b; cursor: pointer; }
-      .clear:hover { color: #0061e0; background: rgba(0,0,0,0.05); }
-      .clear[hidden] { display: none; }
+      .search-now { flex: none; padding: 6px 14px; background: #0061e0; color: #fff; border: none; border-radius: 999px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+      .search-now:hover { filter: brightness(1.05); }
       ul { padding-left: 22px; color: #5b5b66; margin: 0 0 22px; }
       li { margin-bottom: 6px; }
+      /* "Run the search for me next time" checkbox tucked just under the
+         search box. Block-level flex (rather than inline-flex) so the
+         margins collapse cleanly against the form above; negative top
+         margin pulls it close to the pill; left margin lines the checkbox
+         up with the search engine icon in the field above; bottom margin
+         breathes before the next bullet. */
+      .run-next-time {
+        display: flex;
+        width: fit-content;
+        align-items: center;
+        gap: 6px;
+        margin: -4px 0 20px 16px;
+        font-size: 13px;
+        color: #5b5b66;
+        cursor: default;
+      }
+      .run-next-time input { margin: 0; accent-color: #0061e0; }
       .btn { display: inline-block; margin-top: 4px; padding: 8px 18px; background: #0061e0; color: #fff; border: none; border-radius: 4px; font-weight: 600; font-size: 14px; }
+      /* Pinned "this is the consented prototype view" footer — bottom-centred
+         box that switches view variants. The current variant is plain text,
+         the other is a link. */
+      .proto-view {
+        position: fixed;
+        left: 50%;
+        bottom: 16px;
+        transform: translateX(-50%);
+        padding: 7px 14px;
+        background: #f6f7f8;
+        border: 1px solid rgba(0,0,0,0.1);
+        border-radius: 6px;
+        font-size: 12px;
+        color: #5b5b66;
+        white-space: nowrap;
+      }
+      .proto-view a { color: #0061e0; text-decoration: underline; }
+      .proto-view .proto-current { color: #15141a; font-weight: 600; }
     `,
     body: `
       <div class="wrap">
@@ -429,17 +472,12 @@ function dnfBuilder() {
                 </div>
               </details>
               <input type="search" name="q" value="taarget" autocomplete="off" />
-              <button type="button" class="clear" id="dnfClearBtn" aria-label="Clear search">
-                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                  <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-                </svg>
-              </button>
-              <button type="submit" class="submit" aria-label="Search">
-                <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true">
-                  <path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
+              <button type="submit" class="search-now">Search now</button>
             </form>
+            <label class="run-next-time">
+              <input type="checkbox"${consent === "given" ? " checked" : ""} />
+              Search automatically next time
+            </label>
           </li>
           <li>Try connecting on a different device</li>
           <li>Check your modem or router</li>
@@ -447,6 +485,9 @@ function dnfBuilder() {
         </ul>
         <button class="btn">Try again</button>
       </div>
+      <div class="proto-view">Prototype view: Run the search? ${consent === "given"
+        ? `<a href="${escapeHtml(buildProtoViewHref("none"))}" class="proto-link">No consent</a> | <span class="proto-current">Consent given</span>`
+        : `<span class="proto-current">No consent</span> | <a href="${escapeHtml(buildProtoViewHref("given"))}" class="proto-link">Consent given</a>`}</div>
     `,
   };
 }
@@ -470,8 +511,38 @@ styleEl.textContent = styles;
 document.head.appendChild(styleEl);
 document.body.innerHTML = body;
 
-// DNF engine switcher: regular DOM listeners now that we're a real page.
+// Prototype-view footer link picks a different destination for each variant:
+//   • "Consent given" → split-view.html with the DNF page on the left and the
+//     simulated Google "did you mean" results on the right
+//   • "No consent"    → standalone sim.html (no split view, no results)
+// Always navigates the top-level window so the switch works whether we're
+// already inside the split-view iframe or on the standalone page.
 if (kind === "firefox-dnf") {
+  const protoLink = document.querySelector(".proto-view .proto-link");
+  if (protoLink) {
+    protoLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      const nextConsent = consent === "given" ? "none" : "given";
+      let newUrl;
+      if (nextConsent === "given") {
+        const p = new URLSearchParams({ q: query, left: "firefox-dnf", right: "google-didyoumean" });
+        if (domain) p.set("domain", domain);
+        p.set("consent", "given");
+        newUrl = "split-view.html?" + p.toString();
+      } else {
+        const p = new URLSearchParams({ kind: "firefox-dnf", q: query });
+        if (domain) p.set("domain", domain);
+        p.set("consent", "none");
+        newUrl = "sim.html?" + p.toString();
+      }
+      try { window.top.location.href = newUrl; }
+      catch { window.location.href = newUrl; }
+    });
+  }
+}
+
+// DNF engine switcher: regular DOM listeners now that we're a real page.
+if (kind === "firefox-dnf" && document.getElementById("dnfForm")) {
   const details = document.getElementById("engineWrap");
   const icon = document.getElementById("engineIcon");
   const form = document.getElementById("dnfForm");

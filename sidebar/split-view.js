@@ -8,12 +8,18 @@ const query = params.get("q") || "";
 const leftId = params.get("left") || "google";
 const rightId = params.get("right") || "bing";
 const domain = params.get("domain") || "";
+// Forwarded to the left iframe so the DNF page can render the matching
+// consent variant (the right pane is suppressed when consent === "none").
+const consent = params.get("consent") === "none" ? "none" : "given";
 
 document.title = "Split view: " + (query || "search");
 
-function simURL(kind) {
+function simURL(kind, extra) {
   const p = new URLSearchParams({ kind, q: query });
   if (domain) p.set("domain", domain);
+  if (extra) {
+    for (const [k, v] of Object.entries(extra)) p.set(k, v);
+  }
   return "sim.html?" + p.toString();
 }
 
@@ -24,5 +30,9 @@ let rightDelay = 120 + Math.random() * 480;
 while (Math.abs(leftDelay - rightDelay) < 120) {
   rightDelay = 120 + Math.random() * 480;
 }
-setTimeout(() => { document.getElementById("left").src = simURL(leftId); }, leftDelay);
-setTimeout(() => { document.getElementById("right").src = simURL(rightId); }, rightDelay);
+setTimeout(() => { document.getElementById("left").src = simURL(leftId, { consent }); }, leftDelay);
+// `right=blank` (used by the No-consent DNF variant) leaves the right pane
+// empty — the search hasn't run, so there are no results to show.
+if (rightId !== "blank") {
+  setTimeout(() => { document.getElementById("right").src = simURL(rightId); }, rightDelay);
+}

@@ -16,6 +16,9 @@ const ENGINES = [
   { id: "amazon",     re: /^https?:\/\/(www\.)?amazon\.[a-z.]+\/s\b/i,                                param: "k" },
   { id: "wikipedia",  re: /^https?:\/\/(www\.)?[a-z-]+\.wikipedia\.org\/wiki\/Special:Search\b/i,    param: "search" },
   { id: "perplexity", re: /^https?:\/\/(www\.)?perplexity\.ai\/(?:\?|search\b)/i,                    param: "q" },
+  { id: "target",     re: /^https?:\/\/(www\.)?target\.com\/s\b/i,                                    param: "searchTerm" },
+  { id: "bestbuy",    re: /^https?:\/\/(www\.)?bestbuy\.com\/site\/searchpage\.jsp\b/i,               param: "st" },
+  { id: "walmart",    re: /^https?:\/\/(www\.)?walmart\.com\/search\b/i,                              param: "q" },
 ];
 
 // Returns { engineId, query } if the URL is a recognised SERP with a
@@ -206,19 +209,27 @@ function isContentPage(url) {
   return typeof url === "string" && /^https?:\/\//i.test(url);
 }
 
-// Mirror the user's manually-blocked domain list from storage.local into the
-// in-memory list that isBlockedForAI() reads. Runs on startup and on every
-// change so toggles in Settings take effect immediately for the next nav.
-async function refreshUserBlockedDomains() {
+// Mirror the user's allow-list from storage.local into the in-memory list
+// that isBlockedForAI() reads. On first run (key absent) the list is seeded
+// with DEFAULT_ALLOWED_DOMAINS so the prototype works out of the box on the
+// major shopping sites. Runs on startup and on every change so edits in
+// Settings take effect immediately for the next navigation.
+async function refreshUserAllowedDomains() {
   try {
-    const data = await browser.storage.local.get("userBlockedDomains");
-    setUserBlockedDomains(Array.isArray(data.userBlockedDomains) ? data.userBlockedDomains : []);
+    const data = await browser.storage.local.get("userAllowedDomains");
+    if (!Array.isArray(data.userAllowedDomains)) {
+      // Never seeded — write the defaults so they show as editable entries.
+      await browser.storage.local.set({ userAllowedDomains: DEFAULT_ALLOWED_DOMAINS.slice() });
+      setUserAllowedDomains(DEFAULT_ALLOWED_DOMAINS);
+      return;
+    }
+    setUserAllowedDomains(data.userAllowedDomains);
   } catch (e) { /* storage unavailable */ }
 }
-refreshUserBlockedDomains();
+refreshUserAllowedDomains();
 if (browser.storage && browser.storage.onChanged) {
   browser.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.userBlockedDomains) refreshUserBlockedDomains();
+    if (area === "local" && changes.userAllowedDomains) refreshUserAllowedDomains();
   });
 }
 

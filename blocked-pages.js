@@ -342,19 +342,66 @@ const BLOCKED_PATTERNS = [
   { reason: "bug tracker pages",      type: "domain", pattern: "bugzilla.mozilla.org" },
 ];
 
-// Per-user list of domains the user has added in Settings. Populated by
-// background.js from storage.local on startup and whenever it changes;
-// kept in memory so isBlockedForAI() can stay synchronous.
-let USER_BLOCKED_DOMAINS = [];
-function setUserBlockedDomains(list) {
-  USER_BLOCKED_DOMAINS = Array.isArray(list)
+// --- Allow-list model -----------------------------------------------------
+//
+// The prototype now uses a WHITELIST: page content is sent to the AI only
+// when the page's domain is on the allow-list. Everything else is skipped.
+// The big BLOCKED_PATTERNS table above is no longer consulted for gating —
+// it's retained for reference / possible future use (e.g. excluding auth
+// or checkout paths even within an allowed shop).
+//
+// DEFAULT_ALLOWED_DOMAINS seeds the user's editable list on first run. It's
+// duplicated in sidebar/sidebar.js (setupAllowedDomainsUI) so the Settings
+// preview can seed itself without the background script — keep both in
+// lock-step. Entries ending in ".*" match any public suffix, so "amazon.*"
+// covers amazon.com, amazon.co.uk, amazon.ca, smile.amazon.com, etc.
+const DEFAULT_ALLOWED_DOMAINS = [
+  "amazon.*",
+  "walmart.*",
+  "target.com",
+  "bestbuy.*",
+  "costco.*",
+  "ebay.*",
+  "etsy.com",
+  "wayfair.*",
+  "ikea.com",
+  "newegg.*",
+  "homedepot.*",
+  "lowes.*",
+  "staples.*",
+  "canadiantire.ca",
+  "thebay.com",
+  "bhphotovideo.com",
+  "argos.co.uk",
+  "johnlewis.com",
+  "currys.co.uk",
+];
+
+// Per-user allow-list, mirrored from storage.local by background.js (seeded
+// with DEFAULT_ALLOWED_DOMAINS on first run). Kept in memory so the gate
+// below stays synchronous.
+let USER_ALLOWED_DOMAINS = [];
+function setUserAllowedDomains(list) {
+  USER_ALLOWED_DOMAINS = Array.isArray(list)
     ? list.map((d) => String(d || "").trim().toLowerCase()).filter(Boolean)
     : [];
 }
 
+// True if `hostname` (already www-stripped, lowercased) matches an allow-list
+// `pattern`. "shop.*" matches shop.com / shop.co.uk / sub.shop.com; a plain
+// "shop.com" matches the host itself and any subdomain.
+function domainMatchesAllow(hostname, pattern) {
+  if (!pattern) return false;
+  if (pattern.endsWith(".*")) {
+    const base = pattern.slice(0, -2);
+    return hostname.startsWith(base + ".") || hostname.includes("." + base + ".");
+  }
+  return hostname === pattern || hostname.endsWith("." + pattern);
+}
+
 // Returns a short reason string if the URL should NOT be analysed by AI,
-// or null if it's fair game. The reason is suitable for displaying to the
-// user ("Skipped: admin pages") but isn't currently surfaced anywhere.
+// or null if it's allowed. Allow-list based: only listed shopping domains
+// are sent; everything else is skipped.
 function isBlockedForAI(url) {
   if (!url) return "no url";
   if (BLOCKED_PROTOCOLS.some((p) => url.startsWith(p))) return "system page";
@@ -366,31 +413,9 @@ function isBlockedForAI(url) {
 
   const hostname = parsed.hostname.replace(/^www\./, "");
 
-  // User-added hostnames take precedence over the built-in list so a manual
-  // block always wins. Matches the host itself and any of its subdomains.
-  for (const d of USER_BLOCKED_DOMAINS) {
-    if (hostname === d || hostname.endsWith("." + d)) return "user-blocked domain";
+  for (const d of USER_ALLOWED_DOMAINS) {
+    if (domainMatchesAllow(hostname, d)) return null;
   }
 
-  for (const { reason, type, pattern } of BLOCKED_PATTERNS) {
-    if (type === "domain") {
-      if (hostname === pattern || hostname.endsWith("." + pattern)) return reason;
-      if (pattern.includes("/")) {
-        const slash = pattern.indexOf("/");
-        const dHost = pattern.slice(0, slash);
-        const dPath = pattern.slice(slash);
-        if ((hostname === dHost || hostname.endsWith("." + dHost)) && parsed.pathname.startsWith(dPath)) {
-          return reason;
-        }
-      }
-    } else if (type === "subdomain_prefix") {
-      if (parsed.hostname === pattern || parsed.hostname.startsWith(pattern + ".")) return reason;
-    } else if (type === "path_prefix") {
-      const path = parsed.pathname.toLowerCase();
-      const p = pattern.toLowerCase();
-      if (path === p || path.startsWith(p + "/")) return reason;
-    }
-  }
-
-  return null;
+  return "not an allowed site";
 }
