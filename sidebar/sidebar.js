@@ -85,6 +85,8 @@ const DEFAULT_ALLOWED_DOMAINS = [
   "argos.co.uk",
   "johnlewis.com",
   "currys.co.uk",
+  "firefox.com",
+  "mozilla.org",
 ];
 
 function normaliseHostname(s) {
@@ -439,7 +441,7 @@ const VERSION_RELEASE_DATE = "2026-05-14"; // ISO YYYY-MM-DD; bump on release
       v = browser.runtime.getManifest().version;
     }
   } catch (e) {}
-  const version = v || "1.0.10";
+  const version = v || "1.0.99";
   let dateText = "";
   try {
     const d = new Date(VERSION_RELEASE_DATE + "T00:00:00");
@@ -449,7 +451,12 @@ const VERSION_RELEASE_DATE = "2026-05-14"; // ISO YYYY-MM-DD; bump on release
       }).format(d);
     }
   } catch (e) {}
-  el.textContent = dateText ? `v${version} (${dateText})` : `v${version}`;
+  const isDev = version === "1.0.99";
+  if (isDev) {
+    el.textContent = "Dev version";
+  } else {
+    el.textContent = dateText ? `v${version} (${dateText})` : `v${version}`;
+  }
 })();
 
 if (typeof browser === "undefined") {
@@ -1921,41 +1928,119 @@ const analyzedBlockedUrls = new Set();
 // instead of flashing it during the skeleton/load.
 let pageSuggestionsRenderedForUrl = "";
 
+// Shared: run the page analysis for the currently-blocked URL. Used by both
+// "Allow this once" (one-page opt-in) and "Always allow on {domain}" (after
+// the domain has just been added to the allow-list).
+async function runAnalyzeForCurrentBlockedPage() {
+  if (currentSuggKind !== "blocked") return;
+  const url = currentSuggSourceKey;
+  const btn = document.getElementById("suggestionsAnalyzeBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Analyzing…"; }
+  let title = "";
+  let text = "";
+  try {
+    if (typeof browser !== "undefined" && browser.tabs) {
+      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+      if (tab) {
+        title = tab.title || "";
+        try {
+          const ctx = await browser.tabs.sendMessage(tab.id, { type: "extract-page-context" });
+          if (ctx) {
+            title = ctx.title || title;
+            text = ctx.text || "";
+          }
+        } catch { /* content script not ready or blocked */ }
+      }
+    }
+  } catch { /* tabs API unavailable */ }
+  analyzedBlockedUrls.add(url);
+  setSuggestionsActive({ kind: "page", url, title, text });
+}
+
+// Add the current blocked page's hostname to the user-editable allow-list.
+// Returns the hostname that was added (or already present).
+async function addCurrentHostToAllowList() {
+  const url = currentSuggSourceKey;
+  let host = "";
+  try { host = new URL(url).hostname.replace(/^www\./, "").toLowerCase(); } catch {}
+  if (!host) return "";
+  let list = [];
+  try {
+    if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
+      const d = await browser.storage.local.get(USER_ALLOWED_DOMAINS_KEY);
+      list = Array.isArray(d[USER_ALLOWED_DOMAINS_KEY]) ? d[USER_ALLOWED_DOMAINS_KEY] : [];
+    } else {
+      const raw = localStorage.getItem(USER_ALLOWED_DOMAINS_KEY);
+      list = raw ? JSON.parse(raw) : [];
+    }
+  } catch {}
+  if (!list.includes(host)) {
+    const next = [...list, host].sort();
+    try {
+      if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
+        await browser.storage.local.set({ [USER_ALLOWED_DOMAINS_KEY]: next });
+      } else {
+        localStorage.setItem(USER_ALLOWED_DOMAINS_KEY, JSON.stringify(next));
+      }
+    } catch {}
+  }
+  return host;
+}
+
 (function setupAnalyzeNow() {
   const btn = document.getElementById("suggestionsAnalyzeBtn");
-  if (!btn) return;
-  btn.addEventListener("click", async () => {
+  const overlay = document.getElementById("analyzeConsentOverlay");
+  const alwaysBtn = document.getElementById("analyzeConsentAlwaysBtn");
+  const onceBtn = document.getElementById("analyzeConsentOnceBtn");
+  const closeBtn = document.getElementById("analyzeConsentCloseBtn");
+  if (!btn || !overlay || !alwaysBtn || !onceBtn) return;
+  if (closeBtn) closeBtn.addEventListener("click", () => { overlay.hidden = true; });
+
+  function open() {
+    // Fill the domain into the description so the user sees exactly which
+    // site's content is about to be sent to AI. Domain is bolded.
+    let host = "";
+    try { host = new URL(currentSuggSourceKey).hostname.replace(/^www\./, "").toLowerCase(); } catch {}
+    const title = document.getElementById("analyzeConsentTitle");
+    if (title) {
+      const safeHost = (host || "this site").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      title.innerHTML = `<strong>${safeHost}</strong> content will be sent to AI`;
+    }
+    overlay.hidden = false;
+  }
+  function close() { overlay.hidden = true; }
+
+  btn.addEventListener("click", () => {
     if (currentSuggKind !== "blocked") return;
-    const url = currentSuggSourceKey;
-    btn.disabled = true;
-    btn.textContent = "Analyzing…";
-    // Try to grab the active tab's title and (where allowed) page text so
-    // the AI gets more than just a URL. The domain itself is NOT added to
-    // the allow-list — this is a one-page opt-in. The ••• menu that
-    // appears alongside the badge offers a permanent whitelist if the
-    // user wants it.
-    let title = "";
-    let text = "";
-    try {
-      if (typeof browser !== "undefined" && browser.tabs) {
-        const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-        if (tab) {
-          title = tab.title || "";
-          try {
-            const ctx = await browser.tabs.sendMessage(tab.id, { type: "extract-page-context" });
-            if (ctx) {
-              title = ctx.title || title;
-              text = ctx.text || "";
-            }
-          } catch { /* content script not ready or blocked */ }
-        }
-      }
-    } catch { /* tabs API unavailable */ }
-    analyzedBlockedUrls.add(url);
-    // Drive the standard page-suggestions flow. setSuggestionsActive will
-    // call updateRelatedTabsAvailability internally, which sees the URL in
-    // analyzedBlockedUrls and shows the badge + ••• menu.
-    setSuggestionsActive({ kind: "page", url, title, text });
+    open();
+  });
+
+  onceBtn.addEventListener("click", async () => {
+    close();
+    await runAnalyzeForCurrentBlockedPage();
+  });
+
+  alwaysBtn.addEventListener("click", async () => {
+    close();
+    await addCurrentHostToAllowList();
+    // Drop the in-session manual-analyze flag so the ••• menu doesn't show
+    // (the domain is now permanently allow-listed, the menu offering exactly
+    // that action would be redundant).
+    analyzedBlockedUrls.delete(currentSuggSourceKey);
+    await runAnalyzeForCurrentBlockedPage();
+    // runAnalyzeForCurrentBlockedPage adds the URL back to the set so the
+    // badge logic treats it as opted-in; remove it again so the menu stays
+    // hidden now that the domain is on the allow-list.
+    analyzedBlockedUrls.delete(currentSuggSourceKey);
+    updateRelatedTabsAvailability();
+  });
+
+  // Close on Escape / backdrop click.
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !overlay.hidden) close();
+  });
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) close();
   });
 })();
 
@@ -2050,7 +2135,7 @@ function updateRelatedTabsAvailability() {
     analyzeBtn.hidden = !showAnalyze;
     if (showAnalyze) {
       analyzeBtn.disabled = false;
-      analyzeBtn.textContent = "Analyze now";
+      analyzeBtn.textContent = "Get related suggestions";
     }
   }
   const relatedMenu = document.getElementById("suggestionsRelatedMenu");
@@ -2064,8 +2149,8 @@ function updateRelatedTabsAvailability() {
         let host = "";
         try { host = new URL(currentSuggSourceKey).hostname.replace(/^www\./, ""); } catch {}
         item.innerHTML = host
-          ? `Whitelist <strong>${escapeAttr(host)}</strong> for analysis`
-          : "Whitelist this site for analysis";
+          ? `Allow AI analysis of <strong>${escapeAttr(host)}</strong>`
+          : "Allow AI analysis of this site";
       }
     } else {
       const popup = relatedMenu.querySelector(".sc-related-menu-popup");

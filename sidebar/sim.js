@@ -385,12 +385,13 @@ function dnfBuilder() {
       p { font-size: 14px; color: #5b5b66; margin: 0 0 12px; }
       .url { font-weight: 600; color: #15141a; }
       .what { font-size: 14px; font-weight: 500; color: #15141a; margin: 18px 0 8px; }
-      .search { display: flex; align-items: center; gap: 6px; margin: 6px 0 12px; padding: 4px; background: #fff; border: 1px solid #ccc; border-radius: 999px; box-shadow: 0 0 6px rgba(0,0,0,0.05); }
+      .what.search-intro { margin-top: 36px; }
+      .search { display: flex; align-items: center; gap: 10px; width: min(550px, calc(100vw - 32px)); margin: 22px 0 14px; margin-left: calc(50% - min(275px, 50vw - 16px)); padding: 10px 12px; background: #fff; border: 1px solid #ccc; border-radius: 999px; box-shadow: 0 0 6px rgba(0,0,0,0.05); }
       .search:focus-within { border-color: #0061e0; box-shadow: 0 0 0 4px rgba(0, 97, 224, 0.12), 0 0 14px 2px rgba(0, 97, 224, 0.12); }
       .engine-wrap { position: relative; display: inline-flex; }
       .engine-wrap > summary { list-style: none; }
       .engine-wrap > summary::-webkit-details-marker { display: none; }
-      .engine { display: inline-flex; align-items: center; gap: 4px; padding: 5px 8px; background: #f6f7f8; border: 1px solid rgba(0,0,0,0.04); border-radius: 999px; color: #6b6b6b; font: inherit; cursor: pointer; }
+      .engine { display: inline-flex; align-items: center; gap: 4px; padding: 9px 12px; background: #f6f7f8; border: 1px solid rgba(0,0,0,0.04); border-radius: 999px; color: #6b6b6b; font: inherit; cursor: pointer; }
       .engine:hover { background: #dcdedf; }
       .engine .circle { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; background: #fff; border-radius: 50%; }
       .engine .circle svg { width: 12px; height: 12px; }
@@ -400,9 +401,10 @@ function dnfBuilder() {
       .engine-item.is-current { color: #0061e0; }
       .engine-mini { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 22px; height: 22px; background: #fff; border: 1px solid rgba(0,0,0,0.06); border-radius: 50%; }
       .engine-mini svg { width: 14px; height: 14px; }
-      .search input { flex: 1; min-width: 0; padding: 5px 4px 3px; font: inherit; font-size: 14px; color: #15141a; background: transparent; border: none; outline: none; }
+      .search input { flex: 1; min-width: 0; padding: 9px 4px 7px; font: inherit; font-size: 20px; font-weight: 600; color: #15141a; background: transparent; border: none; outline: none; }
       .search input::-webkit-search-cancel-button, .search input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
-      .search-now { flex: none; padding: 6px 14px; background: #0061e0; color: #fff; border: none; border-radius: 999px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+      .search input::placeholder { color: #b8b8c0; font-weight: 400; }
+      .search-now { flex: none; padding: 10px 18px; background: #0061e0; color: #fff; border: none; border-radius: 999px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
       .search-now:hover { filter: brightness(1.05); }
       ul { padding-left: 22px; color: #5b5b66; margin: 0 0 22px; }
       li { margin-bottom: 6px; }
@@ -417,77 +419,126 @@ function dnfBuilder() {
         width: fit-content;
         align-items: center;
         gap: 6px;
-        margin: -4px 0 20px 16px;
-        font-size: 13px;
+        margin: -4px 0 32px 0;
+        font-size: 14px;
         color: #5b5b66;
         cursor: default;
+        white-space: nowrap;
       }
       .run-next-time input { margin: 0; accent-color: #0061e0; }
-      .btn { display: inline-block; margin-top: 4px; padding: 8px 18px; background: #0061e0; color: #fff; border: none; border-radius: 4px; font-weight: 600; font-size: 14px; }
+      .btn { display: inline-block; margin-top: 4px; padding: 7px 18px; background: transparent; color: #15141a; border: 1px solid #c5c5cc; border-radius: 4px; font-weight: 600; font-size: 14px; cursor: pointer; }
+      .btn:hover { background: rgba(0,0,0,0.04); }
       /* Pinned "this is the consented prototype view" footer — bottom-centred
          box that switches view variants. The current variant is plain text,
          the other is a link. */
       .proto-view {
         position: fixed;
         left: 50%;
-        bottom: 16px;
+        bottom: 0;
         transform: translateX(-50%);
-        padding: 7px 14px;
+        padding: 0;
         background: #f6f7f8;
         border: 1px solid rgba(0,0,0,0.1);
-        border-radius: 6px;
+        border-bottom: none;
+        border-radius: 6px 6px 0 0;
         font-size: 12px;
         color: #5b5b66;
         white-space: nowrap;
+        overflow: hidden;
       }
-      .proto-view a { color: #0061e0; text-decoration: underline; }
-      .proto-view .proto-current { color: #15141a; font-weight: 600; }
+      .proto-view-header {
+        padding: 4px 14px;
+        background: rgba(0,0,0,0.06);
+        font-size: 11px;
+        font-weight: 600;
+        color: #5b5b66;
+        text-align: center;
+      }
+      .proto-view-body { padding: 7px 14px; }
+      .proto-view a.proto-link,
+      .proto-view .proto-current {
+        display: inline-block;
+        margin: 0 4px;
+        padding: 4px 12px;
+        border-radius: 999px;
+        color: #15141a;
+        font-weight: 400;
+        text-decoration: none;
+        line-height: 1.4;
+      }
+      /* Unpressed (out): raised button — lighter top, subtle drop shadow. */
+      .proto-view a.proto-link {
+        background: linear-gradient(#ffffff, #e7e7eb);
+        border: 1px solid rgba(0,0,0,0.18);
+        box-shadow:
+          0 1px 0 rgba(255,255,255,0.9) inset,
+          0 1px 2px rgba(0,0,0,0.18),
+          0 2px 0 rgba(0,0,0,0.08);
+      }
+      .proto-view a.proto-link:hover { filter: brightness(0.98); }
+      .proto-view a.proto-link:active {
+        background: linear-gradient(#d8d8de, #c7c7cd);
+        box-shadow:
+          0 1px 2px rgba(0,0,0,0.25) inset,
+          0 2px 4px rgba(0,0,0,0.18) inset;
+        transform: translateY(1px);
+      }
+      /* Pressed (in): recessed — darker, inset shadow, no drop shadow,
+         nudged down 1px so the row reads as "pushed in". */
+      .proto-view .proto-current {
+        background: linear-gradient(#c7c7cd, #d8d8de);
+        border: 1px solid rgba(0,0,0,0.22);
+        box-shadow:
+          0 1px 3px rgba(0,0,0,0.28) inset,
+          0 2px 5px rgba(0,0,0,0.18) inset;
+        transform: translateY(1px);
+      }
     `,
     body: `
       <div class="wrap">
         <img class="icon" src="../images/no-connection.svg" alt="" />
-        <h1>Server not found</h1>
-        <p>Firefox can’t connect to the server at <span class="url">${escapeHtml(domain || "the requested address")}</span></p>
-        <p class="what">What can you do about it?</p>
+        <h1>Server not found: <strong>${escapeHtml(domain || "the requested address")}</strong></h1>
+        <p class="what search-intro">Try searching instead</p>
+        <form class="search" id="dnfForm">
+          <details class="engine-wrap" id="engineWrap">
+            <summary>
+              <span class="engine" aria-label="Change search engine">
+                <span class="circle" id="engineIcon" aria-hidden="true">${MINI_ICONS.google}</span>
+                <svg class="chev" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+                  <path d="M2 4.5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+            </summary>
+            <div class="engine-panel" role="menu">
+              ${Object.keys(MINI_ICONS).map((id, i) => `
+                <button type="button" class="engine-item${i === 0 ? " is-current" : ""}" data-engine="${id}" role="menuitem">
+                  <span class="engine-mini" aria-hidden="true">${MINI_ICONS[id]}</span>
+                  <span>${ENGINE_NAMES[id]}</span>
+                </button>
+              `).join("")}
+            </div>
+          </details>
+          <input type="search" name="q" value="taarget" placeholder="Search with ${escapeHtml(ENGINE_NAMES.google)}" autocomplete="off" />
+          <button type="submit" class="search-now">Search now</button>
+        </form>
+        <label class="run-next-time">
+          <input type="checkbox"${consent === "given" ? " checked" : ""} />
+          Search automatically next time Firefox can’t find a server
+        </label>
+        <p class="what">What else could you try?</p>
         <ul>
-          <li>
-            Try searching
-            <form class="search" id="dnfForm">
-              <details class="engine-wrap" id="engineWrap">
-                <summary>
-                  <span class="engine" aria-label="Change search engine">
-                    <span class="circle" id="engineIcon" aria-hidden="true">${MINI_ICONS.google}</span>
-                    <svg class="chev" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
-                      <path d="M2 4.5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </span>
-                </summary>
-                <div class="engine-panel" role="menu">
-                  ${Object.keys(MINI_ICONS).map((id, i) => `
-                    <button type="button" class="engine-item${i === 0 ? " is-current" : ""}" data-engine="${id}" role="menuitem">
-                      <span class="engine-mini" aria-hidden="true">${MINI_ICONS[id]}</span>
-                      <span>${ENGINE_NAMES[id]}</span>
-                    </button>
-                  `).join("")}
-                </div>
-              </details>
-              <input type="search" name="q" value="taarget" autocomplete="off" />
-              <button type="submit" class="search-now">Search now</button>
-            </form>
-            <label class="run-next-time">
-              <input type="checkbox"${consent === "given" ? " checked" : ""} />
-              Search automatically next time
-            </label>
-          </li>
           <li>Try connecting on a different device</li>
           <li>Check your modem or router</li>
           <li>Disconnect and reconnect to Wi-Fi</li>
         </ul>
         <button class="btn">Try again</button>
       </div>
-      <div class="proto-view">Prototype view: Run the search? ${consent === "given"
-        ? `<a href="${escapeHtml(buildProtoViewHref("none"))}" class="proto-link">No consent</a> | <span class="proto-current">Consent given</span>`
-        : `<span class="proto-current">No consent</span> | <a href="${escapeHtml(buildProtoViewHref("given"))}" class="proto-link">Consent given</a>`}</div>
+      <div class="proto-view">
+        <div class="proto-view-header">Prototype view</div>
+        <div class="proto-view-body"><strong>Run the search?</strong> ${consent === "given"
+          ? `<a href="${escapeHtml(buildProtoViewHref("none"))}" class="proto-link">No consent yet</a><span class="proto-current">Consent given</span>`
+          : `<span class="proto-current">No consent yet</span><a href="${escapeHtml(buildProtoViewHref("given"))}" class="proto-link">Consent given</a>`}</div>
+      </div>
     `,
   };
 }
@@ -506,10 +557,19 @@ const BUILDERS = {
 const builder = (BUILDERS[kind] || BUILDERS.google);
 const { styles, body } = builder();
 
+// When this page is hosted inside split-view.html, the proto-view box is
+// rendered by the parent so it can sit dead-centre across both iframes
+// instead of being trapped inside one pane.
+const inSplitView = window.top !== window;
+
 const styleEl = document.createElement("style");
 styleEl.textContent = styles;
 document.head.appendChild(styleEl);
 document.body.innerHTML = body;
+if (inSplitView) {
+  const pv = document.querySelector(".proto-view");
+  if (pv) pv.remove();
+}
 
 // Prototype-view footer link picks a different destination for each variant:
 //   • "Consent given" → split-view.html with the DNF page on the left and the
@@ -563,6 +623,7 @@ if (kind === "firefox-dnf" && document.getElementById("dnfForm")) {
       if (!ENGINE_URL[id]) return;
       currentId = id;
       icon.innerHTML = MINI_ICONS[id];
+      if (input) input.placeholder = `Search with ${ENGINE_NAMES[id]}`;
       document.querySelectorAll(".engine-item").forEach((b) => {
         b.classList.toggle("is-current", b.dataset.engine === id);
       });

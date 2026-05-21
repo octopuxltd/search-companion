@@ -375,6 +375,8 @@ const DEFAULT_ALLOWED_DOMAINS = [
   "argos.co.uk",
   "johnlewis.com",
   "currys.co.uk",
+  "firefox.com",
+  "mozilla.org",
 ];
 
 // Per-user allow-list, mirrored from storage.local by background.js (seeded

@@ -485,7 +485,7 @@ body:not(.sc-content-ready) .sc-content {
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--muted);
 }
 .sc-related-badge[hidden] { display: none; }
@@ -499,7 +499,7 @@ body:not(.sc-content-ready) .sc-content {
   padding: 0;
   font: inherit;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--accent);
   background: transparent;
   border: none;
@@ -521,7 +521,7 @@ body:not(.sc-content-ready) .sc-content {
 
 /* "•••" menu that appears next to the Related badge after the user has
    manually opted a non-whitelisted page in via Analyze now. Single item
-   inside: "Whitelist this site for analysis". */
+   inside: "Allow AI analysis of this site". */
 .sc-related-menu { position: relative; display: inline-flex; }
 .sc-related-menu[hidden] { display: none; }
 .sc-related-menu-trigger {
@@ -1674,6 +1674,85 @@ section[aria-label="From Firefox"] .sc-list li.sc-skel-row > a::before {
   font-weight: 500;
 }
 
+/* Compact floating confirmation styled like the "Slow because prototype"
+   card — small bordered box, not a full-screen takeover. Used by the
+   "Show related suggestions?" prompt. */
+.sc-mini-confirm {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 16px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--fg);
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+}
+.sc-mini-confirm[hidden] { display: none; }
+.sc-mini-confirm h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.sc-mini-confirm p {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--fg);
+  white-space: nowrap;
+}
+.sc-mini-confirm-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.sc-mini-confirm-primary,
+.sc-mini-confirm-secondary {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 7px 14px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sc-mini-confirm-primary {
+  color: #fff;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+}
+.sc-mini-confirm-primary:hover { filter: brightness(1.05); }
+.sc-mini-confirm-secondary {
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+.sc-mini-confirm-secondary:hover { background: var(--hover); }
+.sc-mini-confirm-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  appearance: none; -webkit-appearance: none;
+  background: none; border: none; padding: 0;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+}
+.sc-mini-confirm-close:hover { color: var(--fg); }
+
 .sc-refine-tip {
   position: fixed;
   z-index: 40;
@@ -1977,7 +2056,7 @@ body.is-settings .sc-search { display: none; }
               <path d="M2 6.5l2.5 2.5L10 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </span>
-          <button type="button" class="sc-related-analyze" id="suggestionsAnalyzeBtn" hidden>Analyze now</button>
+          <button type="button" class="sc-related-analyze" id="suggestionsAnalyzeBtn" hidden>Get related suggestions</button>
           <span class="sc-related-menu" id="suggestionsRelatedMenu" hidden>
             <button type="button" class="sc-related-menu-trigger" id="suggestionsRelatedMenuBtn" aria-haspopup="menu" aria-expanded="false" aria-label="More actions">
               <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -1987,7 +2066,7 @@ body.is-settings .sc-search { display: none; }
               </svg>
             </button>
             <div class="sc-related-menu-popup" role="menu" hidden>
-              <button type="button" class="sc-related-menu-item" data-action="whitelist" role="menuitem">Whitelist this site for analysis</button>
+              <button type="button" class="sc-related-menu-item" data-action="whitelist" role="menuitem">Allow AI analysis of this site</button>
             </div>
           </span>
         </span>
@@ -2026,6 +2105,14 @@ body.is-settings .sc-search { display: none; }
       </div>
       <div class="sc-suggestions-footer">
         <button type="button" class="sc-show-more" aria-expanded="false">Show more</button>
+      </div>
+      <div class="sc-mini-confirm" id="analyzeConsentOverlay" role="dialog" aria-modal="true" aria-labelledby="analyzeConsentTitle" hidden>
+        <button type="button" class="sc-mini-confirm-close" id="analyzeConsentCloseBtn" aria-label="Dismiss">✕</button>
+        <p id="analyzeConsentTitle"><strong>this site</strong> content will be sent to AI</p>
+        <div class="sc-mini-confirm-actions">
+          <button type="button" id="analyzeConsentAlwaysBtn" class="sc-mini-confirm-primary">Always allow</button>
+          <button type="button" id="analyzeConsentOnceBtn" class="sc-mini-confirm-secondary">Allow once</button>
+        </div>
       </div>
     </section>
 
@@ -2357,13 +2444,12 @@ body.is-settings .sc-search { display: none; }
       <div class="sc-settings-card">
         <label class="sc-settings-row">
           <input type="checkbox" id="settingPageSuggestions" />
-          <span>While browsing whitelisted sites</span>
+          <span>While browsing allowed sites</span>
         </label>
-        <p class="sc-settings-help">Allowed sites you visit with the sidebar open are analysed by AI to provide relevant suggestions.</p>
+        <p class="sc-settings-help">Browsing the sites below will send page content to an AI to generate suggestions.</p>
 
         <div class="sc-settings-subcard" id="allowedSitesCard">
-          <p class="sc-settings-label">Allow these sites for page content analysis</p>
-          <p class="sc-settings-help">Only pages on these domains are sent to the AI. Each entry covers the domain and its subdomains; ‘amazon.*’ matches any country domain (amazon.com, amazon.co.uk …).</p>
+          <p class="sc-settings-label">Allow list:</p>
           <form class="sc-settings-domain-add" id="blockedDomainForm">
             <input type="text" id="blockedDomainInput" placeholder="example.com" autocomplete="off" spellcheck="false" />
             <button type="submit" class="sc-btn-secondary">Add</button>
@@ -2414,6 +2500,10 @@ body.is-settings .sc-search { display: none; }
       <button type="button" id="disclaimerAgreeBtn" class="sc-disclaimer-agree">Agree</button>
     </div>
   </div>
+
+  <!-- Confirmation shown when the user clicks "Get relevant suggestions" on a
+       non-allow-listed page. Two-action: permanently allow on the domain, or
+       allow just this one page. -->
 
   <div class="sc-row-menu-popup" id="rowMenuPopup" role="menu" hidden>
     <button type="button" data-row-action="dig" role="menuitem">Dig deeper without searching</button>

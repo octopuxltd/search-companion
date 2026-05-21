@@ -36,3 +36,31 @@ setTimeout(() => { document.getElementById("left").src = simURL(leftId, { consen
 if (rightId !== "blank") {
   setTimeout(() => { document.getElementById("right").src = simURL(rightId); }, rightDelay);
 }
+
+// Render the prototype-view footer at the top level so it sits dead-centre
+// of the whole window rather than inside one of the iframes. The two options
+// flip between consent variants — clicking the unpressed one navigates the
+// top window to the matching destination.
+function buildHref(nextConsent) {
+  const p = new URLSearchParams({ kind: "firefox-dnf", q: query, consent: nextConsent });
+  if (domain) p.set("domain", domain);
+  if (nextConsent === "given") {
+    return "split-view.html?" + new URLSearchParams({
+      q: query, left: "firefox-dnf", right: "google-didyoumean", domain, consent: "given",
+    }).toString();
+  }
+  return "sim.html?" + p.toString();
+}
+const pv = document.getElementById("protoView");
+const noConsentSlot = document.getElementById("protoNoConsent");
+const givenSlot = document.getElementById("protoGiven");
+if (pv && noConsentSlot && givenSlot) {
+  if (consent === "given") {
+    noConsentSlot.outerHTML = `<a href="${buildHref("none")}" class="proto-link">No consent yet</a>`;
+    givenSlot.outerHTML = `<span class="proto-current">Consent given</span>`;
+  } else {
+    noConsentSlot.outerHTML = `<span class="proto-current">No consent yet</span>`;
+    givenSlot.outerHTML = `<a href="${buildHref("given")}" class="proto-link">Consent given</a>`;
+  }
+  pv.hidden = false;
+}

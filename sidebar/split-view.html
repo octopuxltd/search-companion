@@ -4,16 +4,76 @@
   <meta charset="utf-8" />
   <title>Split view</title>
   <style>
-    html, body { margin: 0; padding: 0; height: 100%; background: #F8F8FA; }
+    html, body { margin: 0; padding: 0; height: 100%; background: #F8F8FA; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
     body { display: flex; gap: 5px; }
     iframe { flex: 1; height: 100%; border: 0; background: #fff; }
     #left { border-right: 0.5px solid #C5C5C5; }
     #right { border-left: 0.5px solid #C5C5C5; }
+
+    /* Prototype-view box, rendered here (not inside the iframe) so it sits
+       dead-centre of the whole window rather than off-centre in one pane. */
+    .proto-view {
+      position: fixed;
+      left: 50%;
+      bottom: 0;
+      transform: translateX(-50%);
+      padding: 0;
+      background: #f6f7f8;
+      border: 1px solid rgba(0,0,0,0.1);
+      border-bottom: none;
+      border-radius: 6px 6px 0 0;
+      font-size: 12px;
+      color: #5b5b66;
+      white-space: nowrap;
+      overflow: hidden;
+      z-index: 20;
+    }
+    .proto-view-header {
+      padding: 4px 14px;
+      background: rgba(0,0,0,0.06);
+      font-size: 11px;
+      font-weight: 600;
+      color: #5b5b66;
+      text-align: center;
+    }
+    .proto-view-body { padding: 7px 14px; }
+    .proto-view a.proto-link,
+    .proto-view .proto-current {
+      display: inline-block;
+      margin: 0 4px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      color: #15141a;
+      font-weight: 400;
+      text-decoration: none;
+      line-height: 1.4;
+    }
+    .proto-view a.proto-link {
+      background: linear-gradient(#ffffff, #e7e7eb);
+      border: 1px solid rgba(0,0,0,0.18);
+      box-shadow:
+        0 1px 0 rgba(255,255,255,0.9) inset,
+        0 1px 2px rgba(0,0,0,0.18),
+        0 2px 0 rgba(0,0,0,0.08);
+    }
+    .proto-view a.proto-link:hover { filter: brightness(0.98); }
+    .proto-view .proto-current {
+      background: linear-gradient(#c7c7cd, #d8d8de);
+      border: 1px solid rgba(0,0,0,0.22);
+      box-shadow:
+        0 1px 3px rgba(0,0,0,0.28) inset,
+        0 2px 5px rgba(0,0,0,0.18) inset;
+      transform: translateY(1px);
+    }
   </style>
 </head>
 <body>
   <iframe id="left" title="Left pane"></iframe>
   <iframe id="right" title="Right pane"></iframe>
+  <div class="proto-view" id="protoView" hidden>
+    <div class="proto-view-header">Prototype view</div>
+    <div class="proto-view-body"><strong>Run the search?</strong> <span id="protoNoConsent"></span><span id="protoGiven"></span></div>
+  </div>
   <script src="split-view.js"></script>
 </body>
 </html>
